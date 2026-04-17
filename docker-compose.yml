@@ -1,0 +1,25 @@
+# Teammate quickstart: install Docker Desktop, then run `docker compose up` from the repo root.
+# This starts both the FastAPI backend and Ollama with persistent model storage.
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - ollama
+
+  ollama:
+    image: ollama/ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+volumes:
+  ollama_data:
