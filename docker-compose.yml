@@ -12,7 +12,8 @@ services:
     env_file:
       - ./backend/.env
     depends_on:
-      - ollama
+      ollama:
+        condition: service_healthy
 
   ollama:
     image: ollama/ollama
@@ -20,6 +21,22 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
+    command: >
+      sh -c "
+        ollama serve &
+        until ollama list >/dev/null 2>&1; do
+          sleep 1;
+        done;
+        ollama pull llama3;
+        ollama pull phi3;
+        wait
+      "
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list | grep -q 'llama3' && ollama list | grep -q 'phi3'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
 
 volumes:
   ollama_data:
