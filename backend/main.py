@@ -36,12 +36,14 @@ def on_startup() -> None:
 # ---------- Schemas ----------
 
 class RegisterRequest(BaseModel):
+    name: str
     email: EmailStr
     password: str
 
 
 class RegisterResponse(BaseModel):
     id: int
+    name: str
     email: str
 
 
@@ -63,5 +65,5 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> Registe
         )
 
     hashed = _hash_password(payload.password)
-    user = repo.create(email=payload.email, hashed_password=hashed)
-    return RegisterResponse(id=user.id, email=user.email)
+    user = repo.create(name=payload.name, email=payload.email, hashed_password=hashed)
+    return RegisterResponse(id=user.id, name=user.name, email=user.email)
