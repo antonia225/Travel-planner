@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BASE_URL } from "../services/api";
+import { checkPassword, allRulesMet } from "../utils/validation";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
@@ -35,28 +36,6 @@ const C = {
   red50:     "#fef2f2",
   redBorder: "#fca5a5",
 };
-
-// ─── Password validation ──────────────────────────────────────────────────────
-
-type PasswordRules = {
-  minLength:    boolean;
-  hasUppercase: boolean;
-  hasLowercase: boolean;
-  hasNumber:    boolean;
-};
-
-function checkPassword(pw: string): PasswordRules {
-  return {
-    minLength:    pw.length >= 8,
-    hasUppercase: /[A-Z]/.test(pw),
-    hasLowercase: /[a-z]/.test(pw),
-    hasNumber:    /[0-9]/.test(pw),
-  };
-}
-
-function allRulesMet(r: PasswordRules) {
-  return Object.values(r).every(Boolean);
-}
 
 // ─── Rule row ─────────────────────────────────────────────────────────────────
 
