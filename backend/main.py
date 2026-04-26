@@ -36,6 +36,7 @@ def on_startup() -> None:
 # ---------- Schemas ----------
 
 class RegisterRequest(BaseModel):
+    name: str
     email: EmailStr
     password: str
     name: str
@@ -56,6 +57,7 @@ class RegisterRequest(BaseModel):
 
 class RegisterResponse(BaseModel):
     id: int
+    name: str
     email: str
     name: str
 
