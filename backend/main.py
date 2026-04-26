@@ -6,8 +6,9 @@ from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import create_all_tables
+from models import create_all_tables, UserInterestCategory
 from repositories.user_repository import UserRepository
+from repositories.user_interest_repository import UserInterestRepository
 from schemas.itinerary import ItineraryResponse
 from services.architect_service import generate_itinerary
 
@@ -42,20 +43,7 @@ class RegisterRequest(BaseModel):
     name: str
     email: EmailStr
     password: str
-    name: str
-
-    @field_validator("password")
-    @classmethod
-    def validate_password(cls, value: str) -> str:
-        if len(value) < 8:
-            raise ValueError("Password must be at least 8 characters long.")
-        if not any(c.isupper() for c in value):
-            raise ValueError("Password must contain at least one uppercase letter.")
-        if not any(c.islower() for c in value):
-            raise ValueError("Password must contain at least one lowercase letter.")
-        if not any(c.isdigit() for c in value):
-            raise ValueError("Password must contain at least one number.")
-        return value
+    interests: list[UserInterestCategory] = []
 
     @field_validator("password")
     @classmethod
@@ -78,7 +66,24 @@ class RegisterResponse(BaseModel):
     id: int
     name: str
     email: str
-    name: str
+
+
+class UserInterestRequest(BaseModel):
+    category: UserInterestCategory
+
+
+class UserInterestResponse(BaseModel):
+    id: int
+    user_id: int
+    category: UserInterestCategory
+
+    class Config:
+        from_attributes = True
+
+
+class UserInterestsResponse(BaseModel):
+    user_id: int
+    categories: list[UserInterestCategory]
 
 
 # ---------- Routes ----------
@@ -91,6 +96,7 @@ def health_check() -> dict[str, str]:
 @app.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> RegisterResponse:
     repo = UserRepository(db)
+    interest_repo = UserInterestRepository(db)
 
     if repo.get_by_email(payload.email):
         raise HTTPException(
@@ -100,6 +106,11 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> Registe
 
     hashed = _hash_password(payload.password)
     user = repo.create(email=payload.email, hashed_password=hashed, name=payload.name)
+    
+    # Save user interests if provided
+    if payload.interests:
+        interest_repo.add_interests(user.id, payload.interests)
+    
     return RegisterResponse(id=user.id, email=user.email, name=user.name)
 
 
@@ -122,3 +133,49 @@ async def create_itinerary(payload: ItineraryRequest) -> ItineraryResponse:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
         ) from exc
+
+
+# ---------- User Interests Routes ----------
+
+@app.get("/users/{user_id}/interests", response_model=UserInterestsResponse)
+def get_user_interests(user_id: int, db: Session = Depends(get_db)) -> UserInterestsResponse:
+    """Get all interest categories for a user"""
+    interest_repo = UserInterestRepository(db)
+    categories = interest_repo.get_categories_by_user_id(user_id)
+    return UserInterestsResponse(user_id=user_id, categories=categories)
+
+
+@app.post("/users/{user_id}/interests", response_model=UserInterestResponse, status_code=status.HTTP_201_CREATED)
+def add_user_interest(user_id: int, payload: UserInterestRequest, db: Session = Depends(get_db)) -> UserInterestResponse:
+    """Add a single interest category for a user"""
+    repo = UserRepository(db)
+    interest_repo = UserInterestRepository(db)
+    
+    # Verify user exists
+    if not repo.get_by_id(user_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found.",
+        )
+    
+    # Check if interest already exists
+    if interest_repo.has_interest(user_id, payload.category):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="User already has this interest.",
+        )
+    
+    interest = interest_repo.add_interest(user_id, payload.category)
+    return UserInterestResponse(id=interest.id, user_id=interest.user_id, category=interest.category)
+
+
+@app.delete("/users/{user_id}/interests/{category}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_user_interest(user_id: int, category: UserInterestCategory, db: Session = Depends(get_db)) -> None:
+    """Remove a specific interest category for a user"""
+    interest_repo = UserInterestRepository(db)
+    
+    if not interest_repo.delete_interest_by_category(user_id, category):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Interest not found.",
+        )
