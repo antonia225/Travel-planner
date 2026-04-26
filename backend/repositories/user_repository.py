@@ -12,8 +12,8 @@ class UserRepository:
     def get_by_email(self, email: str) -> Optional[User]:
         return self._db.query(User).filter(User.email == email).first()
 
-    def create(self, name: str, email: str, hashed_password: str) -> User:
-        user = User(name=name, email=email, hashed_password=hashed_password)
+    def create(self, email: str, hashed_password: str, name: str) -> User:
+        user = User(email=email, hashed_password=hashed_password, name=name)
         self._db.add(user)
         self._db.commit()
         self._db.refresh(user)

@@ -1,7 +1,7 @@
 import bcrypt
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -39,12 +39,27 @@ class RegisterRequest(BaseModel):
     name: str
     email: EmailStr
     password: str
+    name: str
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        if len(value) < 8:
+            raise ValueError("Password must be at least 8 characters long.")
+        if not any(c.isupper() for c in value):
+            raise ValueError("Password must contain at least one uppercase letter.")
+        if not any(c.islower() for c in value):
+            raise ValueError("Password must contain at least one lowercase letter.")
+        if not any(c.isdigit() for c in value):
+            raise ValueError("Password must contain at least one number.")
+        return value
 
 
 class RegisterResponse(BaseModel):
     id: int
     name: str
     email: str
+    name: str
 
 
 # ---------- Routes ----------
@@ -65,5 +80,5 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> Registe
         )
 
     hashed = _hash_password(payload.password)
-    user = repo.create(name=payload.name, email=payload.email, hashed_password=hashed)
-    return RegisterResponse(id=user.id, name=user.name, email=user.email)
+    user = repo.create(email=payload.email, hashed_password=hashed, name=payload.name)
+    return RegisterResponse(id=user.id, email=user.email, name=user.name)
