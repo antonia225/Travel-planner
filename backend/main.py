@@ -1,4 +1,5 @@
 import bcrypt
+import re
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, field_validator
@@ -53,6 +54,22 @@ class RegisterRequest(BaseModel):
         if not any(c.isdigit() for c in value):
             raise ValueError("Password must contain at least one number.")
         return value
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        errors: list[str] = []
+        if len(v) < 8:
+            errors.append("at least 8 characters")
+        if not re.search(r"[A-Z]", v):
+            errors.append("one uppercase letter (A–Z)")
+        if not re.search(r"[a-z]", v):
+            errors.append("one lowercase letter (a–z)")
+        if not re.search(r"[0-9]", v):
+            errors.append("one number (0–9)")
+        if errors:
+            raise ValueError("Password must contain: " + ", ".join(errors))
+        return v
 
 
 class RegisterResponse(BaseModel):

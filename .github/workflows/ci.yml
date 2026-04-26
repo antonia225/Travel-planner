@@ -28,6 +28,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run Jest Unit Tests
+        run: npm test -- --passWithNoTests
+
       - name: Verify Expo build
         run: npx expo export
 
@@ -60,5 +63,5 @@ jobs:
             printf "def test_placeholder():\n    assert True\n" > tests/test_placeholder.py
           fi
 
-      - name: Run tests
+      - name: Run PyTest Unit Tests
         run: python -m pytest
