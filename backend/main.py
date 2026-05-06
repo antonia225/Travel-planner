@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import create_all_tables
 from repositories.user_repository import UserRepository
+from schemas.itinerary import ItineraryResponse
+from services.architect_service import generate_itinerary
 
 app = FastAPI(title="AI Travel Planner API")
 
@@ -99,3 +101,24 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> Registe
     hashed = _hash_password(payload.password)
     user = repo.create(email=payload.email, hashed_password=hashed, name=payload.name)
     return RegisterResponse(id=user.id, email=user.email, name=user.name)
+
+
+# ---------- Itinerary ----------
+
+class ItineraryRequest(BaseModel):
+    destination: str
+    num_days: int
+
+
+@app.post("/generate-itinerary", response_model=ItineraryResponse)
+async def create_itinerary(payload: ItineraryRequest) -> ItineraryResponse:
+    try:
+        return await generate_itinerary(
+            destination=payload.destination,
+            days=payload.num_days,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
