@@ -14,6 +14,7 @@ from schemas.auth import (
     TokenResponse,
     UserProfile,
 )
+from schemas.interests import InterestCategory, UserInterests
 from schemas.itinerary import ItineraryResponse
 from services.architect_service import generate_itinerary
 from services.auth_service import (
@@ -85,7 +86,64 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
 
 @app.get("/me", response_model=UserProfile)
 def read_current_user(current_user: User = Depends(get_current_user)) -> UserProfile:
-    return UserProfile(id=current_user.id, name=current_user.name, email=current_user.email)
+    return UserProfile(
+        id=current_user.id,
+        name=current_user.name,
+        email=current_user.email,
+        interests=current_user.interests or [],
+    )
+
+
+@app.put("/me/interests", response_model=UserProfile)
+def update_user_interests(
+    payload: UserInterests,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UserProfile:
+    """Update current user's travel interests."""
+    repo = UserRepository(db)
+    interests_list = [interest.value for interest in payload.interests]
+    updated_user = repo.update_interests(current_user.id, interests_list)
+
+    if not updated_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found.",
+        )
+
+    return UserProfile(
+        id=updated_user.id,
+        name=updated_user.name,
+        email=updated_user.email,
+        interests=updated_user.interests or [],
+    )
+
+
+@app.get("/interests/categories")
+def list_interest_categories() -> dict[str, list[str]]:
+    """List all available interest categories for travel planning."""
+    return {
+        "categories": [interest.value for interest in InterestCategory],
+        "descriptions": {
+            "adventure": "Hiking, climbing, extreme sports",
+            "water_sports": "Diving, surfing, kayaking",
+            "nature_wildlife": "Safaris, birdwatching, national parks",
+            "culture_history": "Museums, historical sites, heritage",
+            "photography": "Photography-focused trips",
+            "spiritual_religious": "Religious sites, meditation",
+            "food_culinary": "Food tours, cooking classes, local cuisine",
+            "fine_dining": "Upscale restaurants, wine tasting",
+            "relaxation_wellness": "Spas, yoga, wellness retreats",
+            "beach": "Beach relaxation, coastal activities",
+            "shopping": "Markets, boutiques, local shopping",
+            "nightlife": "Clubs, bars, nightlife scene",
+            "entertainment": "Theater, concerts, shows",
+            "budget_conscious": "Budget accommodations, cheap eats",
+            "luxury": "High-end hotels, premium experiences",
+            "eco_tourism": "Sustainable travel, eco-lodges",
+            "family_friendly": "Family activities, kid-friendly",
+        },
+    }
 
 
 # ---------- Itinerary ----------
@@ -104,6 +162,7 @@ async def create_itinerary(
         return await generate_itinerary(
             destination=payload.destination,
             days=payload.num_days,
+            user_interests=current_user.interests or [],
         )
     except ValueError as exc:
         raise HTTPException(

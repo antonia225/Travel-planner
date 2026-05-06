@@ -116,3 +116,48 @@ class TestAuthGuard:
         body = response.json()
         assert body["email"] == _VALID_PAYLOAD["email"]
         assert body["name"] == _VALID_PAYLOAD["name"]
+        assert body["interests"] == []  # Default empty interests
+
+
+class TestInterests:
+    def test_update_interests_succeeds(self, client: TestClient):
+        """User can update their travel interests."""
+        client.post("/register", json=_VALID_PAYLOAD)
+        login_response = client.post(
+            "/login",
+            json={"email": _VALID_PAYLOAD["email"], "password": _VALID_PAYLOAD["password"]},
+        )
+
+        token = login_response.json()["access_token"]
+
+        # Update interests
+        interests_payload = {
+            "interests": ["adventure", "food_culinary", "culture_history"]
+        }
+        response = client.put(
+            "/me/interests",
+            json=interests_payload,
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert set(body["interests"]) == set(interests_payload["interests"])
+
+    def test_update_interests_requires_auth(self, client: TestClient):
+        """Update interests endpoint requires authentication."""
+        payload = {"interests": ["adventure"]}
+        response = client.put("/me/interests", json=payload)
+
+        assert response.status_code == 401
+
+    def test_list_interest_categories(self, client: TestClient):
+        """List all available interest categories."""
+        response = client.get("/interests/categories")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert "categories" in body
+        assert "descriptions" in body
+        assert "adventure" in body["categories"]
+        assert len(body["categories"]) > 0

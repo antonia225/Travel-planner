@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, JSON
 from sqlalchemy.orm import DeclarativeBase
 
 from database import DatabaseSingleton
@@ -15,6 +15,7 @@ class User(Base):
     name = Column(String, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
+    interests = Column(JSON, nullable=False, default=list)
 
 
 def create_all_tables() -> None:

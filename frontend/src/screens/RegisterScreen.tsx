@@ -11,7 +11,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { BASE_URL } from "../services/api";
+import { useAuth } from "../context/AuthContext";
 import { checkPassword, allRulesMet } from "../utils/validation";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
@@ -56,14 +56,19 @@ function RuleRow({ met, label }: { met: boolean; label: string }) {
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-export default function RegisterScreen() {
+export default function RegisterScreen({
+  onSwitchToLogin,
+}: {
+  onSwitchToLogin: () => void;
+}) {
+  const { register, isLoading } = useAuth();
+
   const [name,           setName]           = useState("");
   const [email,          setEmail]          = useState("");
   const [password,       setPassword]       = useState("");
   const [hintsVisible,   setHintsVisible]   = useState(false);
   const [errorMessage,   setErrorMessage]   = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
-  const [isLoading,      setIsLoading]      = useState(false);
+  const [isFormLoading,  setIsFormLoading]  = useState(false);
 
   const [nameFocused,     setNameFocused]     = useState(false);
   const [emailFocused,    setEmailFocused]    = useState(false);
@@ -80,42 +85,17 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     setErrorMessage("");
-    setSuccessMessage("");
-    setIsLoading(true);
-
-    const controller = new AbortController();
-    const timeoutId  = setTimeout(() => controller.abort(), 10_000);
+    setIsFormLoading(true);
 
     try {
-      const response = await fetch(`${BASE_URL}/register`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ name: name.trim(), email: email.trim(), password }),
-        signal:  controller.signal,
-      });
-      clearTimeout(timeoutId);
-
-      if (response.status === 201) {
-        setSuccessMessage("Account created successfully! You can now log in.");
-        setName(""); setEmail(""); setPassword(""); setHintsVisible(false);
-      } else if (response.status === 409) {
-        setErrorMessage("An account with this email already exists.");
-      } else {
-        const data = await response.json().catch(() => ({}));
-        setErrorMessage(
-          (data as { detail?: string })?.detail ?? "Something went wrong. Please try again."
-        );
-      }
+      await register(name.trim(), email.trim(), password);
+      // Auto-navigate on success is handled by App.tsx
     } catch (err: unknown) {
-      clearTimeout(timeoutId);
-      const isAbort = err instanceof Error && err.name === "AbortError";
-      setErrorMessage(
-        isAbort
-          ? "Request timed out. Make sure the backend is running and the IP in api.ts is correct."
-          : "Could not reach the server. Check your network and the IP address in api.ts."
-      );
+      const errorMsg =
+        err instanceof Error ? err.message : "Registration failed. Please try again.";
+      setErrorMessage(errorMsg);
     } finally {
-      setIsLoading(false);
+      setIsFormLoading(false);
     }
   };
 
@@ -169,16 +149,6 @@ export default function RegisterScreen() {
                   <Text style={s.bannerDotText}>!</Text>
                 </View>
                 <Text style={s.bannerTextRed}>{errorMessage}</Text>
-              </View>
-            )}
-
-            {/* Success banner */}
-            {successMessage !== "" && (
-              <View style={s.bannerSuccess}>
-                <View style={s.bannerDotTeal}>
-                  <Text style={s.bannerDotText}>✓</Text>
-                </View>
-                <Text style={s.bannerTextTeal}>{successMessage}</Text>
               </View>
             )}
 
@@ -242,12 +212,12 @@ export default function RegisterScreen() {
 
             {/* ── Submit ── */}
             <TouchableOpacity
-              style={[s.button, !isFormValid || isLoading ? s.buttonDisabled : s.buttonActive]}
+              style={[s.button, !isFormValid || isFormLoading ? s.buttonDisabled : s.buttonActive]}
               onPress={handleRegister}
-              disabled={!isFormValid || isLoading}
+              disabled={!isFormValid || isFormLoading}
               activeOpacity={0.8}
             >
-              {isLoading ? (
+              {isFormLoading ? (
                 <ActivityIndicator color={isFormValid ? C.white : C.slate400} />
               ) : (
                 <Text style={[s.buttonText, !isFormValid && s.buttonTextDisabled]}>
@@ -255,6 +225,14 @@ export default function RegisterScreen() {
                 </Text>
               )}
             </TouchableOpacity>
+
+            {/* ── Switch to Login ── */}
+            <View style={s.switchContainer}>
+              <Text style={s.switchText}>Already have an account? </Text>
+              <TouchableOpacity onPress={onSwitchToLogin}>
+                <Text style={s.switchLink}>Sign in</Text>
+              </TouchableOpacity>
+            </View>
 
             <Text style={s.footer}>
               By signing up you agree to our Terms &amp; Privacy Policy
@@ -383,6 +361,24 @@ const s = StyleSheet.create({
   buttonDisabled: { backgroundColor: C.slate200 },
   buttonText:         { color: C.white,     fontSize: 15, fontWeight: "700", letterSpacing: 0.4 },
   buttonTextDisabled: { color: C.slate400 },
+
+  // Switch to Login
+  switchContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: 20,
+  },
+  switchText: {
+    color: C.slate500,
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  switchLink: {
+    color: C.teal600,
+    fontSize: 13,
+    fontWeight: "700",
+    textDecorationLine: "underline",
+  },
 
   footer: {
     textAlign: "center", color: C.slate400,
