@@ -64,3 +64,55 @@ class TestRegister:
             assert response.status_code == 422, (
                 f"Expected 422 for password {weak_pw!r}, got {response.status_code}"
             )
+
+
+class TestLogin:
+    def test_success_returns_access_token(self, client: TestClient):
+        client.post("/register", json=_VALID_PAYLOAD)
+
+        response = client.post(
+            "/login",
+            json={"email": _VALID_PAYLOAD["email"], "password": _VALID_PAYLOAD["password"]},
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["token_type"] == "bearer"
+        assert isinstance(body["access_token"], str)
+        assert len(body["access_token"]) > 0
+
+    def test_invalid_credentials_return_401(self, client: TestClient):
+        client.post("/register", json=_VALID_PAYLOAD)
+
+        response = client.post(
+            "/login",
+            json={"email": _VALID_PAYLOAD["email"], "password": "WrongPassword1"},
+        )
+
+        assert response.status_code == 401
+        assert "invalid" in response.json()["detail"].lower()
+
+
+class TestAuthGuard:
+    def test_me_requires_authentication(self, client: TestClient):
+        response = client.get("/me")
+
+        assert response.status_code == 401
+
+    def test_me_returns_profile_when_authorized(self, client: TestClient):
+        client.post("/register", json=_VALID_PAYLOAD)
+        login_response = client.post(
+            "/login",
+            json={"email": _VALID_PAYLOAD["email"], "password": _VALID_PAYLOAD["password"]},
+        )
+
+        token = login_response.json()["access_token"]
+        response = client.get(
+            "/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["email"] == _VALID_PAYLOAD["email"]
+        assert body["name"] == _VALID_PAYLOAD["name"]

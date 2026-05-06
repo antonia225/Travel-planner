@@ -12,6 +12,9 @@ class UserRepository:
     def get_by_email(self, email: str) -> Optional[User]:
         return self._db.query(User).filter(User.email == email).first()
 
+    def get_by_id(self, user_id: int) -> Optional[User]:
+        return self._db.query(User).filter(User.id == user_id).first()
+
     def create(self, email: str, hashed_password: str, name: str) -> User:
         user = User(email=email, hashed_password=hashed_password, name=name)
         self._db.add(user)
