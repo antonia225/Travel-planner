@@ -53,12 +53,5 @@ jobs:
           pip install -r requirements.txt
           pip install pytest
 
-      - name: Ensure placeholder test exists if suite is empty
-        run: |
-          mkdir -p tests
-          if [ -z "$(find tests -type f \( -name 'test_*.py' -o -name '*_test.py' \) -print -quit)" ]; then
-            printf "def test_placeholder():\n    assert True\n" > tests/test_placeholder.py
-          fi
-
       - name: Run tests
         run: python -m pytest

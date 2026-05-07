@@ -75,3 +75,22 @@ def generate_travel_plan(user_prompt: str) -> str:
         raise HTTPException(status_code=503, detail="Could not connect to Ollama service.") from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail="Unexpected AI service failure.") from exc
+
+
+def check_ollama_connection() -> dict[str, object]:
+    base_url = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434").rstrip("/")
+
+    try:
+        response = httpx.get(f"{base_url}/api/tags", timeout=5.0)
+        response.raise_for_status()
+    except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout) as exc:
+        raise HTTPException(status_code=503, detail="Could not connect to Ollama service.") from exc
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Ollama health check failed with status {exc.response.status_code}.",
+        ) from exc
+
+    data = response.json()
+    models = [model.get("name") for model in data.get("models", []) if model.get("name")]
+    return {"status": "ok", "base_url": base_url, "models": models}
