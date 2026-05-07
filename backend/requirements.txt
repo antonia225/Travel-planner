@@ -1,8 +1,9 @@
 fastapi
 uvicorn
 sqlalchemy
-pydantic
+pydantic[email]
 python-dotenv
 httpx
 pytest
 ollama
+bcrypt

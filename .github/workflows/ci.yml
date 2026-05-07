@@ -28,6 +28,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run Jest Unit Tests
+        run: npm test -- --passWithNoTests
+
       - name: Verify Expo build
         run: npx expo export
 
