@@ -2,6 +2,7 @@ import bcrypt
 import re
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from services.ai_service import check_ollama_connection
 from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy.orm import Session
 
@@ -91,6 +92,11 @@ class UserInterestsResponse(BaseModel):
 @app.get("/health")
 def health_check() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/health/ollama")
+def ollama_health_check() -> dict[str, object]:
+    return check_ollama_connection()
 
 
 @app.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)

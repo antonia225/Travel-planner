@@ -12,12 +12,37 @@ services:
     env_file:
       - ./backend/.env
     depends_on:
-      - ollama
+      ollama-init:
+        condition: service_completed_successfully
 
   ollama:
     image: ollama/ollama
     ports:
       - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    command: serve
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  ollama-init:
+    image: ollama/ollama
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        ollama pull llama3
+        ollama pull phi3
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    depends_on:
+      ollama:
+        condition: service_healthy
     volumes:
       - ollama_data:/root/.ollama
 
