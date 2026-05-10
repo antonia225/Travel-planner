@@ -7,4 +7,4 @@ httpx
 pytest
 ollama
 bcrypt
-prometheus-fastapi-instrumentator==6.1.0
+prometheus-fastapi-instrumentator
