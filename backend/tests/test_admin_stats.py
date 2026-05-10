@@ -1,9 +1,11 @@
+import os
 import pytest
 
 
 @pytest.fixture
 def admin_headers(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
     monkeypatch.setenv("ADMIN_API_TOKEN", "test-admin-token")
+    assert os.getenv("ADMIN_API_TOKEN") == "test-admin-token"
     return {"X-Admin-Token": "test-admin-token"}
 
 

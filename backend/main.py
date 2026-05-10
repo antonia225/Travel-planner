@@ -35,12 +35,12 @@ async def _query_prometheus(client: httpx.AsyncClient, prom_url: str, promql: st
         return 0.0
 
 
-async def _require_admin_token(x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")) -> None:
-    admin_token = os.getenv("ADMIN_API_TOKEN")
-    if not admin_token:
+async def _require_admin_token(admin_token: str | None = Header(default=None, alias="X-Admin-Token")) -> None:
+    configured_admin_token = os.getenv("ADMIN_API_TOKEN", "").strip()
+    if not configured_admin_token:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Admin API is disabled.")
 
-    if not x_admin_token or not hmac.compare_digest(x_admin_token, admin_token):
+    if not admin_token or not hmac.compare_digest(admin_token, configured_admin_token):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized.")
 
 
