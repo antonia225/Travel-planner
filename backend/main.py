@@ -15,6 +15,40 @@ from services.architect_service import generate_itinerary
 
 app = FastAPI(title="AI Travel Planner API")
 
+# Prometheus metrics instrumentation
+from prometheus_fastapi_instrumentator import Instrumentator
+Instrumentator().instrument(app).expose(app, include_in_schema=False)
+@app.get("/admin/stats")
+async def admin_stats() -> dict:
+    """
+    Queries Prometheus directly for aggregated system metrics.
+    Falls back to zeros if Prometheus is unreachable (e.g. during tests).
+    """
+    import os, httpx
+
+    prom_url = os.getenv("PROMETHEUS_URL", "http://prometheus:9090")
+
+    async def query(promql: str) -> float:
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                r = await client.get(f"{prom_url}/api/v1/query", params={"query": promql})
+                result = r.json()["data"]["result"]
+                return float(result[0]["value"][1]) if result else 0.0
+        except Exception:
+            return 0.0
+
+    total   = await query('sum(http_requests_total)')
+    active  = await query('sum(http_requests_in_progress)')
+    latency = await query('histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))')
+    errors  = await query('sum(http_requests_total{status=~"4..|5.."})')
+
+    return {
+        "total_requests": int(total),
+        "active_requests": int(active),
+        "avg_latency_ms": round(latency * 1000, 2),
+        "error_count": int(errors),
+    }
+
 # Development CORS policy; tighten in production.
 app.add_middleware(
     CORSMiddleware,
