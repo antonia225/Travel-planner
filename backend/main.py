@@ -13,6 +13,9 @@ from repositories.user_interest_repository import UserInterestRepository
 from schemas.itinerary import ItineraryResponse
 from services.architect_service import generate_itinerary
 
+from schemas.budget import BudgetOptimizerResponse
+from services.budget_optimizer_service import generate_budget_plan
+
 app = FastAPI(title="AI Travel Planner API")
 
 # Development CORS policy; tighten in production.
@@ -68,6 +71,14 @@ class RegisterResponse(BaseModel):
     name: str
     email: str
 
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+class ProfileUpdateRequest(BaseModel):
+    name: str | None = None
+    email: EmailStr | None = None
+
 
 class UserInterestRequest(BaseModel):
     category: UserInterestCategory
@@ -85,6 +96,10 @@ class UserInterestResponse(BaseModel):
 class UserInterestsResponse(BaseModel):
     user_id: int
     categories: list[UserInterestCategory]
+
+class BudgetOptimizerRequest(BaseModel):
+    destination: str
+    budget: int
 
 
 # ---------- Routes ----------
@@ -119,6 +134,58 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> Registe
     
     return RegisterResponse(id=user.id, email=user.email, name=user.name)
 
+@app.post("/login", response_model=RegisterResponse)
+def login(payload: LoginRequest, db: Session = Depends(get_db)) -> RegisterResponse:
+    repo = UserRepository(db)
+
+    user = repo.get_by_email(payload.email)
+    if not user or not _verify_password(payload.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password.",
+        )
+
+    return RegisterResponse(
+        id=user.id,
+        name=user.name,
+        email=user.email,
+    )
+
+@app.patch("/users/{user_id}/profile", response_model=RegisterResponse)
+def update_profile(
+    user_id: int,
+    payload: ProfileUpdateRequest,
+    db: Session = Depends(get_db),
+) -> RegisterResponse:
+    repo = UserRepository(db)
+
+    user = repo.get_by_id(user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found.",
+        )
+
+    if payload.email is not None:
+        existing_user = repo.get_by_email(payload.email)
+        if existing_user and existing_user.id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A user with this email already exists.",
+            )
+
+    updated_user = repo.update(
+        user=user,
+        name=payload.name,
+        email=payload.email,
+    )
+
+    return RegisterResponse(
+        id=updated_user.id,
+        name=updated_user.name,
+        email=updated_user.email,
+    )
+
 
 # ---------- Itinerary ----------
 
@@ -140,6 +207,18 @@ async def create_itinerary(payload: ItineraryRequest) -> ItineraryResponse:
             detail=str(exc),
         ) from exc
 
+@app.post("/optimize-budget", response_model=BudgetOptimizerResponse)
+async def optimize_budget(payload: BudgetOptimizerRequest) -> BudgetOptimizerResponse:
+    try:
+        return await generate_budget_plan(
+            destination=payload.destination,
+            budget=payload.budget,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
 
 # ---------- User Interests Routes ----------
 

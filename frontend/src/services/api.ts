@@ -9,4 +9,4 @@
 // .env.local file at the frontend root and it will take precedence.
 // ─────────────────────────────────────────────────────────────────────────────
 export const BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ?? "http://192.168.1.188:8000";
+  process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
