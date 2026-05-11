@@ -12,6 +12,9 @@ import Constants from "expo-constants";
 // .env.local file at the frontend root and it will take precedence.
 // ─────────────────────────────────────────────────────────────────────────────
 const host = Constants.expoConfig?.hostUri?.split(":")[0];
-const autoDetectedBaseUrl = host ? `http://${host}:8000` : "http://localhost:8000";
+const API_PORT = 8000;
+const autoDetectedBaseUrl = host
+  ? `http://${host}:${API_PORT}`
+  : `http://localhost:${API_PORT}`;
 
 export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? autoDetectedBaseUrl;
