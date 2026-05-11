@@ -1,90 +1,10 @@
-import React, { useState } from "react";
-import { NavigationContainer } from "@react-navigation/native";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { StatusBar } from "expo-status-bar";
-import { ActivityIndicator, View } from "react-native";
-
-import { AuthProvider, useAuth } from "./src/context/AuthContext";
-import HomeScreen from "./src/screens/HomeScreen";
-import LoginScreen from "./src/screens/LoginScreen";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import RegisterScreen from "./src/screens/RegisterScreen";
-
-const Stack = createNativeStackNavigator();
-
-// ─── Auth Stack (Login/Register) ──────────────────────────────────────────────
-
-function AuthStack() {
-  const [isLogin, setIsLogin] = useState(true);
-
-  return (
-    <Stack.Navigator
-      screenOptions={{
-        headerShown: false,
-        animationEnabled: true,
-      }}
-    >
-      {isLogin ? (
-        <Stack.Screen
-          name="Login"
-          options={{ animationTypeForReplace: "pop" }}
-        >
-          {() => (
-            <LoginScreen onSwitchToRegister={() => setIsLogin(false)} />
-          )}
-        </Stack.Screen>
-      ) : (
-        <Stack.Screen
-          name="Register"
-          options={{ animationTypeForReplace: "pop" }}
-        >
-          {() => <RegisterScreen onSwitchToLogin={() => setIsLogin(true)} />}
-        </Stack.Screen>
-      )}
-    </Stack.Navigator>
-  );
-}
-
-// ─── App Stack (Authenticated Routes) ─────────────────────────────────────────
-
-function AppStack() {
-  return (
-    <Stack.Navigator
-      screenOptions={{
-        headerShown: false,
-      }}
-    >
-      <Stack.Screen name="Home" component={HomeScreen} />
-    </Stack.Navigator>
-  );
-}
-
-// ─── Root Navigator ───────────────────────────────────────────────────────────
-
-function RootNavigator() {
-  const { isAuthenticated, isLoading } = useAuth();
-
-  if (isLoading) {
-    return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" color="#0d9488" />
-      </View>
-    );
-  }
-
-  return (
-    <NavigationContainer>
-      {isAuthenticated ? <AppStack /> : <AuthStack />}
-    </NavigationContainer>
-  );
-}
-
-// ─── App ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
   return (
-    <AuthProvider>
-      <RootNavigator />
-      <StatusBar barStyle="light-content" />
-    </AuthProvider>
+    <SafeAreaProvider>
+      <RegisterScreen />
+    </SafeAreaProvider>
   );
 }

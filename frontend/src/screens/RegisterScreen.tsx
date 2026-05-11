@@ -88,8 +88,32 @@ export default function RegisterScreen({
     setIsFormLoading(true);
 
     try {
-      await register(name.trim(), email.trim(), password);
-      // Auto-navigate on success is handled by App.tsx
+      const response = await fetch(`${BASE_URL}/register`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ name: name.trim(), email: email.trim(), password }),
+        signal:  controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (response.status === 201) {
+        setSuccessMessage("Account created successfully! You can now log in.");
+        setName(""); setEmail(""); setPassword(""); setHintsVisible(false);
+      } else if (response.status === 409) {
+        setErrorMessage("An account with this email already exists.");
+      } else {
+        const data = await response.json().catch(() => ({}));
+        const detail = (data as { detail?: unknown })?.detail;
+        let message = "Something went wrong. Please try again.";
+        if (typeof detail === "string") {
+          message = detail;
+        } else if (Array.isArray(detail) && detail.length > 0) {
+          message = detail
+            .map((e: { msg?: string }) => e?.msg ?? "Validation error")
+            .join(" | ");
+        }
+        setErrorMessage(message);
+      }
     } catch (err: unknown) {
       const errorMsg =
         err instanceof Error ? err.message : "Registration failed. Please try again.";

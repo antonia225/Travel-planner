@@ -7,4 +7,4 @@ httpx
 pytest
 ollama
 bcrypt
-PyJWT
+prometheus-fastapi-instrumentator
