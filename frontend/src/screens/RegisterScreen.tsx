@@ -128,7 +128,10 @@ export default function RegisterScreen() {
           message = detail;
         } else if (Array.isArray(detail) && detail.length > 0) {
           message = detail
-            .map((e: { msg?: string }) => e?.msg ?? "Validation error")
+            .map(
+              (validationError: { msg?: string }) =>
+                validationError?.msg ?? "Validation error"
+            )
             .join(" | ");
         }
         setErrorMessage(message);
