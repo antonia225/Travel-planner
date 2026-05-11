@@ -1,5 +1,10 @@
-import HomeScreen from "./src/screens/HomeScreen";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import RegisterScreen from "./src/screens/RegisterScreen";
 
 export default function App() {
-  return <HomeScreen />;
+  return (
+    <SafeAreaProvider>
+      <RegisterScreen />
+    </SafeAreaProvider>
+  );
 }
