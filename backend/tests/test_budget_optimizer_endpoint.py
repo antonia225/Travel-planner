@@ -2,6 +2,8 @@ import json
 
 import httpx
 
+_OLLAMA_GENERATE_URL = "http://ollama:11434/api/generate"
+
 
 def _patch_async_client(monkeypatch, response):
     class FakeAsyncClient:
@@ -26,7 +28,7 @@ def _patch_async_client(monkeypatch, response):
 def test_optimize_budget_returns_200_with_valid_model_json(client, monkeypatch):
     class FakeResponse:
         def raise_for_status(self) -> None:
-            return None
+            pass
 
         def json(self) -> dict[str, str]:
             return {
@@ -67,7 +69,7 @@ def test_optimize_budget_returns_200_with_valid_model_json(client, monkeypatch):
 def test_optimize_budget_returns_422_when_model_json_is_invalid(client, monkeypatch):
     class FakeResponse:
         def raise_for_status(self) -> None:
-            return None
+            pass
 
         def json(self) -> dict[str, str]:
             return {"response": "{not-valid-json"}
@@ -86,7 +88,7 @@ def test_optimize_budget_returns_422_when_model_json_is_invalid(client, monkeypa
 def test_optimize_budget_returns_422_on_upstream_http_error(client, monkeypatch):
     class FakeResponse:
         def raise_for_status(self) -> None:
-            request = httpx.Request("POST", "http://ollama:11434/api/generate")
+            request = httpx.Request("POST", _OLLAMA_GENERATE_URL)
             response = httpx.Response(500, request=request)
             raise httpx.HTTPStatusError(
                 "Server error from Ollama",
