@@ -122,10 +122,16 @@ export default function RegisterScreen() {
         setErrorMessage("An account with this email already exists.");
       } else {
         const data = await response.json().catch(() => ({}));
-        setErrorMessage(
-          (data as { detail?: string })?.detail ??
-            "Something went wrong. Please try again."
-        );
+        const detail = (data as { detail?: unknown })?.detail;
+        let message = "Something went wrong. Please try again.";
+        if (typeof detail === "string") {
+          message = detail;
+        } else if (Array.isArray(detail) && detail.length > 0) {
+          message = detail
+            .map((e: { msg?: string }) => e?.msg ?? "Validation error")
+            .join(" | ");
+        }
+        setErrorMessage(message);
       }
     } catch (err: unknown) {
       clearTimeout(timeoutId);
