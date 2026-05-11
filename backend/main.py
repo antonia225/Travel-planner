@@ -1,7 +1,12 @@
+import asyncio
 import bcrypt
+import hmac
+import os
 import re
-from fastapi import Depends, FastAPI, HTTPException, status
+import httpx
+from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
 from services.ai_service import check_ollama_connection
 from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy.orm import Session
@@ -14,6 +19,56 @@ from schemas.itinerary import ItineraryResponse
 from services.architect_service import generate_itinerary
 
 app = FastAPI(title="AI Travel Planner API")
+
+# Prometheus metrics instrumentation
+if os.getenv("ENABLE_METRICS_ENDPOINT", "false").lower() == "true":
+    Instrumentator().instrument(app).expose(app, include_in_schema=False)
+
+
+async def _query_prometheus(client: httpx.AsyncClient, prom_url: str, promql: str) -> float:
+    try:
+        response = await client.get(f"{prom_url}/api/v1/query", params={"query": promql})
+        response.raise_for_status()
+        result = response.json().get("data", {}).get("result", [])
+        return float(result[0]["value"][1]) if result else 0.0
+    except (httpx.HTTPError, KeyError, TypeError, ValueError):
+        return 0.0
+
+
+async def _require_admin_token(x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")) -> None:
+    configured_admin_token = os.getenv("ADMIN_API_TOKEN", "").strip()
+    if not configured_admin_token:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Admin API token not configured.",
+        )
+
+    if not x_admin_token or not hmac.compare_digest(x_admin_token, configured_admin_token):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized.")
+
+
+@app.get("/admin/stats")
+async def admin_stats(_: None = Depends(_require_admin_token)) -> dict:
+    """
+    Queries Prometheus directly for aggregated system metrics.
+    Falls back to zeros if Prometheus is unreachable (e.g. during tests).
+    """
+    prom_url = os.getenv("PROMETHEUS_URL", "http://prometheus:9090")
+
+    async with httpx.AsyncClient(timeout=3.0) as client:
+        total, active, latency, errors = await asyncio.gather(
+            _query_prometheus(client, prom_url, 'sum(http_requests_total)'),
+            _query_prometheus(client, prom_url, 'sum(http_requests_in_progress)'),
+            _query_prometheus(client, prom_url, 'histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))'),
+            _query_prometheus(client, prom_url, 'sum(http_requests_total{status=~"4..|5.."})'),
+        )
+
+    return {
+        "total_requests": int(total),
+        "active_requests": int(active),
+        "p95_latency_ms": round(latency * 1000, 2),
+        "error_count": int(errors),
+    }
 
 # Development CORS policy; tighten in production.
 app.add_middleware(
