@@ -150,38 +150,39 @@ export default function RegisterScreen() {
   };
 
   const handleLogin = async () => {
-  setErrorMessage("");
-  setSuccessMessage("");
-  setIsLoggingIn(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+    setIsLoggingIn(true);
 
-  try {
-    const response = await fetch(`${BASE_URL}/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: loginEmail.trim(),
-        password: loginPassword,
-      }),
-    });
+    try {
+      const response = await fetch(`${BASE_URL}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: loginEmail.trim(),
+          password: loginPassword,
+        }),
+      });
 
-    const data = await response.json().catch(() => ({}));
+      const data = await response.json().catch(() => ({}));
 
-    if (response.ok) {
-      const user = data as RegisteredUser;
-      setRegisteredUser(user);
-      setProfileName(user.name);
-      setProfileEmail(user.email);
-      setSuccessMessage(`Logged in as ${user.name} (User ID: ${user.id})`);
-    } else {
-      setErrorMessage(
-        (data as { detail?: string })?.detail ?? "Login failed."
-      );
+      if (response.ok) {
+        const user = data as RegisteredUser;
+        setRegisteredUser(user);
+        setProfileName(user.name);
+        setProfileEmail(user.email);
+        setSuccessMessage(`Logged in as ${user.name} (User ID: ${user.id})`);
+      } else {
+        setErrorMessage(
+          (data as { detail?: string })?.detail ?? "Login failed."
+        );
+      }
+    } catch {
+      setErrorMessage("Could not reach the server while logging in.");
+    } finally {
+      setIsLoggingIn(false);
     }
-  } catch {
-    setErrorMessage("Could not reach the server while logging in.");
-  } finally {
-    setIsLoggingIn(false);
-  }
+  };
 };
 
   const handleUpdateProfile = async () => {
