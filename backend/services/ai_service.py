@@ -1,5 +1,8 @@
 """AI services for travel planning."""
 
+import os
+
+import httpx
 from fastapi import HTTPException
 
 from agents.factory import AIAgentFactory
@@ -29,8 +32,6 @@ def generate_travel_plan(user_prompt: str) -> str:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except ConnectionError as e:
         raise HTTPException(status_code=502, detail=f"AI service unavailable: {str(e)}") from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI service error: {str(e)}") from e
     except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout) as exc:
         raise HTTPException(status_code=503, detail="Could not connect to Ollama service.") from exc
     except Exception as exc:
@@ -38,6 +39,7 @@ def generate_travel_plan(user_prompt: str) -> str:
 
 
 def check_ollama_connection() -> dict[str, object]:
+    """Check if Ollama service is available and list available models."""
     base_url = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434").rstrip("/")
 
     try:
@@ -54,4 +56,4 @@ def check_ollama_connection() -> dict[str, object]:
     data = response.json()
     models = [model.get("name") for model in data.get("models", []) if model.get("name")]
     return {"status": "ok", "base_url": base_url, "models": models}
->>>>>>> ee9db43dba58b637dcc7cdc6c3d95979f902bc34
+

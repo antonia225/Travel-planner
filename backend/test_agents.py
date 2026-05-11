@@ -4,6 +4,7 @@ import os
 from unittest.mock import MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 
 from agents.factory import AIAgentFactory
 from agents.mock_agent import MockTravelAIAgent
@@ -189,10 +190,10 @@ class TestAIService:
     @patch("services.ai_service.AIAgentFactory.create_agent")
     def test_generate_travel_plan_validates_empty_prompt(self, mock_create_agent: MagicMock) -> None:
         """Test that generate_travel_plan validates non-empty prompt."""
-        with pytest.raises(ValueError, match="Prompt cannot be empty"):
+        with pytest.raises(HTTPException, match="Prompt must not be empty"):
             generate_travel_plan("")
 
-        with pytest.raises(ValueError, match="Prompt cannot be empty"):
+        with pytest.raises(HTTPException, match="Prompt must not be empty"):
             generate_travel_plan("   ")
 
         # Verify factory was never called for invalid prompts
@@ -200,12 +201,12 @@ class TestAIService:
 
     @patch("services.ai_service.AIAgentFactory.create_agent")
     def test_generate_travel_plan_propagates_agent_errors(self, mock_create_agent: MagicMock) -> None:
-        """Test that generate_travel_plan propagates errors from agent."""
+        """Test that generate_travel_plan converts agent errors to HTTPException."""
         mock_agent = MagicMock()
         mock_agent.generate.side_effect = ConnectionError("Service unavailable")
         mock_create_agent.return_value = mock_agent
 
-        with pytest.raises(ConnectionError):
+        with pytest.raises(HTTPException, match="AI service unavailable"):
             generate_travel_plan("Plan a trip")
 
 
@@ -221,7 +222,7 @@ class TestIntegration:
             assert "London" in result
 
     def test_generate_travel_plan_with_mock_agent_empty_prompt(self) -> None:
-        """Test that empty prompt raises error even with mock agent."""
+        """Test that empty prompt raises HTTPException even with mock agent."""
         with patch.dict(os.environ, {"AI_AGENT_PROVIDER": "mock"}):
-            with pytest.raises(ValueError):
+            with pytest.raises(HTTPException, match="Prompt must not be empty"):
                 generate_travel_plan("")
