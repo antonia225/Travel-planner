@@ -11,6 +11,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useAuth } from "../context/AuthContext";
 import { checkPassword, allRulesMet } from "../utils/validation";
 
@@ -56,11 +58,8 @@ function RuleRow({ met, label }: { met: boolean; label: string }) {
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-export default function RegisterScreen({
-  onSwitchToLogin,
-}: {
-  onSwitchToLogin: () => void;
-}) {
+export default function RegisterScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const { register, isLoading } = useAuth();
 
   const [name,           setName]           = useState("");
@@ -88,32 +87,8 @@ export default function RegisterScreen({
     setIsFormLoading(true);
 
     try {
-      const response = await fetch(`${BASE_URL}/register`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ name: name.trim(), email: email.trim(), password }),
-        signal:  controller.signal,
-      });
-      clearTimeout(timeoutId);
-
-      if (response.status === 201) {
-        setSuccessMessage("Account created successfully! You can now log in.");
-        setName(""); setEmail(""); setPassword(""); setHintsVisible(false);
-      } else if (response.status === 409) {
-        setErrorMessage("An account with this email already exists.");
-      } else {
-        const data = await response.json().catch(() => ({}));
-        const detail = (data as { detail?: unknown })?.detail;
-        let message = "Something went wrong. Please try again.";
-        if (typeof detail === "string") {
-          message = detail;
-        } else if (Array.isArray(detail) && detail.length > 0) {
-          message = detail
-            .map((e: { msg?: string }) => e?.msg ?? "Validation error")
-            .join(" | ");
-        }
-        setErrorMessage(message);
-      }
+      await register(name.trim(), email.trim(), password);
+      navigation.navigate("Home");
     } catch (err: unknown) {
       const errorMsg =
         err instanceof Error ? err.message : "Registration failed. Please try again.";
@@ -253,7 +228,7 @@ export default function RegisterScreen({
             {/* ── Switch to Login ── */}
             <View style={s.switchContainer}>
               <Text style={s.switchText}>Already have an account? </Text>
-              <TouchableOpacity onPress={onSwitchToLogin}>
+              <TouchableOpacity onPress={() => navigation.navigate("Login") }>
                 <Text style={s.switchLink}>Sign in</Text>
               </TouchableOpacity>
             </View>

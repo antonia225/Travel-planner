@@ -61,10 +61,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (response.status === 200) {
         const data = await response.json();
         const newToken = data.access_token;
+
+        const profileResponse = await fetch(`${BASE_URL}/me`, {
+          headers: { Authorization: `Bearer ${newToken}` },
+        });
+
+        if (!profileResponse.ok) {
+          throw new Error("Unable to load user profile.");
+        }
+
+        const profile = await profileResponse.json();
         const newUser: User = {
-          id: data.user.id,
-          email: data.user.email,
-          name: data.user.name,
+          id: String(profile.id),
+          email: profile.email,
+          name: profile.name,
         };
 
         setToken(newToken);

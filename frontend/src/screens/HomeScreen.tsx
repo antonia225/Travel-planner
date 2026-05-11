@@ -7,6 +7,8 @@ import {
   SafeAreaView,
   ActivityIndicator,
 } from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useAuth } from "../context/AuthContext";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
@@ -30,6 +32,7 @@ const C = {
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const { user, logout, isLoading } = useAuth();
 
   const handleLogout = async () => {
@@ -101,6 +104,14 @@ export default function HomeScreen() {
             <Text style={s.featureText}>Discover hidden gems</Text>
           </View>
         </View>
+
+        <TouchableOpacity
+          style={s.libraryButton}
+          onPress={() => navigation.navigate("Library")}
+          activeOpacity={0.85}
+        >
+          <Text style={s.libraryButtonText}>Saved Trips Library</Text>
+        </TouchableOpacity>
 
         {/* ── Logout Button ── */}
         <TouchableOpacity
@@ -233,6 +244,21 @@ const s = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
     flex: 1,
+  },
+
+  libraryButton: {
+    backgroundColor: C.teal600,
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+
+  libraryButtonText: {
+    color: C.white,
+    fontSize: 15,
+    fontWeight: "700",
   },
 
   // Logout Button

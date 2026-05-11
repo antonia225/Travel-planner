@@ -11,6 +11,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useAuth } from "../context/AuthContext";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
@@ -38,11 +40,8 @@ const C = {
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-export default function LoginScreen({
-  onSwitchToRegister,
-}: {
-  onSwitchToRegister: () => void;
-}) {
+export default function LoginScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const { login, isLoading } = useAuth();
 
   const [email, setEmail] = useState("");
@@ -175,7 +174,7 @@ export default function LoginScreen({
             {/* ── Switch to Register ── */}
             <View style={s.switchContainer}>
               <Text style={s.switchText}>Don't have an account? </Text>
-              <TouchableOpacity onPress={onSwitchToRegister}>
+              <TouchableOpacity onPress={() => navigation.navigate("Register") }>
                 <Text style={s.switchLink}>Create one</Text>
               </TouchableOpacity>
             </View>
