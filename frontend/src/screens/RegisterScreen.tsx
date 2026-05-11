@@ -183,7 +183,6 @@ export default function RegisterScreen() {
       setIsLoggingIn(false);
     }
   };
-};
 
   const handleUpdateProfile = async () => {
     if (!registeredUser) return;
@@ -192,15 +191,24 @@ export default function RegisterScreen() {
     setSuccessMessage("");
     setIsUpdatingProfile(true);
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10_000);
+
     try {
-      const response = await fetch(`${BASE_URL}/users/${registeredUser.id}/profile`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: profileName.trim(),
-          email: profileEmail.trim(),
-        }),
-      });
+      const response = await fetch(
+        `${BASE_URL}/users/${registeredUser.id}/profile`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: profileName.trim(),
+            email: profileEmail.trim(),
+          }),
+          signal: controller.signal,
+        }
+      );
+
+      clearTimeout(timeoutId);
 
       const data = await response.json().catch(() => ({}));
 
@@ -218,8 +226,14 @@ export default function RegisterScreen() {
             "Could not update profile. Please try again."
         );
       }
-    } catch {
-      setErrorMessage("Could not reach the server while updating profile.");
+    } catch (err: unknown) {
+      clearTimeout(timeoutId);
+      const isAbort = err instanceof Error && err.name === "AbortError";
+      setErrorMessage(
+        isAbort
+          ? "Profile update timed out. Make sure the backend is running and reachable."
+          : "Could not reach the server while updating profile."
+      );
     } finally {
       setIsUpdatingProfile(false);
     }
