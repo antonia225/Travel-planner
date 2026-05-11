@@ -6,9 +6,11 @@ _OLLAMA_GENERATE_URL = "http://ollama:11434/api/generate"
 
 
 def _patch_async_client(monkeypatch, response):
+    captured: dict[str, object] = {}
+
     class FakeAsyncClient:
         def __init__(self, timeout: httpx.Timeout):
-            self.timeout = timeout
+            captured["timeout"] = timeout
 
         async def __aenter__(self):
             return self
@@ -17,12 +19,15 @@ def _patch_async_client(monkeypatch, response):
             return None
 
         async def post(self, url: str, json: dict):
+            captured["url"] = url
+            captured["json"] = json
             return response
 
     monkeypatch.setattr(
         "services.budget_optimizer_service.httpx.AsyncClient",
         FakeAsyncClient,
     )
+    return captured
 
 
 def test_optimize_budget_returns_200_with_valid_model_json(client, monkeypatch):
@@ -52,7 +57,7 @@ def test_optimize_budget_returns_200_with_valid_model_json(client, monkeypatch):
                 )
             }
 
-    _patch_async_client(monkeypatch, FakeResponse())
+    captured = _patch_async_client(monkeypatch, FakeResponse())
 
     response = client.post(
         "/optimize-budget",
@@ -64,6 +69,8 @@ def test_optimize_budget_returns_200_with_valid_model_json(client, monkeypatch):
     assert body["destination"] == "Rome"
     assert body["total_budget"] == 1000
     assert len(body["recommendations"]) == 2
+    assert captured["url"] == _OLLAMA_GENERATE_URL
+    assert (captured["json"])["model"] == "phi3"
 
 
 def test_optimize_budget_returns_422_when_model_json_is_invalid(client, monkeypatch):
@@ -74,7 +81,7 @@ def test_optimize_budget_returns_422_when_model_json_is_invalid(client, monkeypa
         def json(self) -> dict[str, str]:
             return {"response": "{not-valid-json"}
 
-    _patch_async_client(monkeypatch, FakeResponse())
+    captured = _patch_async_client(monkeypatch, FakeResponse())
 
     response = client.post(
         "/optimize-budget",
@@ -83,6 +90,7 @@ def test_optimize_budget_returns_422_when_model_json_is_invalid(client, monkeypa
 
     assert response.status_code == 422
     assert "Phi-3 returned invalid JSON" in response.json()["detail"]
+    assert captured["url"] == _OLLAMA_GENERATE_URL
 
 
 def test_optimize_budget_returns_422_on_upstream_http_error(client, monkeypatch):
@@ -99,7 +107,7 @@ def test_optimize_budget_returns_422_on_upstream_http_error(client, monkeypatch)
         def json(self) -> dict[str, str]:
             return {"response": "{}"}
 
-    _patch_async_client(monkeypatch, FakeResponse())
+    captured = _patch_async_client(monkeypatch, FakeResponse())
 
     response = client.post(
         "/optimize-budget",
@@ -108,3 +116,4 @@ def test_optimize_budget_returns_422_on_upstream_http_error(client, monkeypatch)
 
     assert response.status_code == 422
     assert "Budget optimizer request failed" in response.json()["detail"]
+    assert captured["url"] == _OLLAMA_GENERATE_URL
