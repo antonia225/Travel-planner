@@ -206,11 +206,29 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> RegisterRespo
         email=user.email,
     )
 
+def require_profile_update_authorization(
+    admin_token: str | None = Header(default=None, alias="X-Admin-Token"),
+) -> None:
+    expected_admin_token = os.getenv("PROFILE_UPDATE_ADMIN_TOKEN")
+    if not expected_admin_token:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Profile update authorization is not configured.",
+        )
+
+    if not admin_token or not hmac.compare_digest(admin_token, expected_admin_token):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authorized to update user profiles.",
+        )
+
+
 @app.patch("/users/{user_id}/profile", response_model=RegisterResponse)
 def update_profile(
     user_id: int,
     payload: ProfileUpdateRequest,
     db: Session = Depends(get_db),
+    _: None = Depends(require_profile_update_authorization),
 ) -> RegisterResponse:
     repo = UserRepository(db)
 
