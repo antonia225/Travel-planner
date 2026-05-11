@@ -12,10 +12,13 @@ from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import create_all_tables, UserInterestCategory
+from dependencies.auth import get_current_user
+from models import create_all_tables, User, UserInterestCategory
 from repositories.user_repository import UserRepository
 from repositories.user_interest_repository import UserInterestRepository
+from repositories.trip_repository import TripRepository
 from schemas.itinerary import ItineraryResponse
+from schemas.trips import TripCreate, TripListResponse, TripResponse, TripUpdate
 from services.architect_service import generate_itinerary
 from services.auth_service import (
     create_access_token,
@@ -277,6 +280,128 @@ async def create_itinerary(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
         ) from exc
+
+
+# ---------- Saved Trips Routes ----------
+
+@app.post("/trips", response_model=TripResponse, status_code=status.HTTP_201_CREATED)
+def create_saved_trip(
+    payload: TripCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> TripResponse:
+    repo = TripRepository(db)
+    trip = repo.create_trip(
+        user_id=current_user.id,
+        title=payload.title,
+        destination=payload.destination,
+        start_date=payload.start_date,
+        duration_days=payload.duration_days,
+        itinerary_data=payload.itinerary_data,
+    )
+    return TripResponse(
+        id=trip.id,
+        user_id=trip.user_id,
+        title=trip.title,
+        destination=trip.destination,
+        start_date=trip.start_date,
+        duration_days=trip.duration_days,
+        itinerary_data=trip.itinerary_data,
+        created_at=trip.created_at,
+    )
+
+
+@app.get("/trips", response_model=TripListResponse)
+def list_saved_trips(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> TripListResponse:
+    repo = TripRepository(db)
+    trips = repo.get_user_trips(current_user.id)
+    return TripListResponse(trips=[
+        TripResponse(
+            id=trip.id,
+            user_id=trip.user_id,
+            title=trip.title,
+            destination=trip.destination,
+            start_date=trip.start_date,
+            duration_days=trip.duration_days,
+            itinerary_data=trip.itinerary_data,
+            created_at=trip.created_at,
+        )
+        for trip in trips
+    ])
+
+
+@app.get("/trips/{trip_id}", response_model=TripResponse)
+def get_saved_trip(
+    trip_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> TripResponse:
+    repo = TripRepository(db)
+    trip = repo.get_trip_by_id(trip_id)
+    if not trip:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found.")
+    if trip.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden.")
+    return TripResponse(
+        id=trip.id,
+        user_id=trip.user_id,
+        title=trip.title,
+        destination=trip.destination,
+        start_date=trip.start_date,
+        duration_days=trip.duration_days,
+        itinerary_data=trip.itinerary_data,
+        created_at=trip.created_at,
+    )
+
+
+@app.put("/trips/{trip_id}", response_model=TripResponse)
+def update_saved_trip(
+    trip_id: int,
+    payload: TripUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> TripResponse:
+    repo = TripRepository(db)
+    trip = repo.get_trip_by_id(trip_id)
+    if not trip:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found.")
+    if trip.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden.")
+
+    updated_trip = repo.update_trip(trip_id, payload.model_dump(exclude_none=True))
+    if not updated_trip:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found.")
+
+    return TripResponse(
+        id=updated_trip.id,
+        user_id=updated_trip.user_id,
+        title=updated_trip.title,
+        destination=updated_trip.destination,
+        start_date=updated_trip.start_date,
+        duration_days=updated_trip.duration_days,
+        itinerary_data=updated_trip.itinerary_data,
+        created_at=updated_trip.created_at,
+    )
+
+
+@app.delete("/trips/{trip_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_saved_trip(
+    trip_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    repo = TripRepository(db)
+    trip = repo.get_trip_by_id(trip_id)
+    if not trip:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found.")
+    if trip.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden.")
+
+    if not repo.delete_trip(trip_id):
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not delete trip.")
 
 
 # ---------- User Interests Routes ----------

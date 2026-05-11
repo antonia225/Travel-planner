@@ -8,3 +8,4 @@ pytest
 ollama
 bcrypt
 prometheus-fastapi-instrumentator
+PyJWT>=2.8.0
