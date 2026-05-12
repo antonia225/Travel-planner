@@ -1,6 +1,5 @@
 from enum import Enum
-
-from sqlalchemy import Column, ForeignKey, Integer, String, JSON
+from sqlalchemy import Column, Date, DateTime, Enum as SQLEnum, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import DeclarativeBase, relationship
 
 from database import DatabaseSingleton
@@ -26,6 +25,11 @@ class UserInterestCategory(str, Enum):
     BUDGET = "budget"
 
 
+class TripStatus(str, Enum):
+    UPCOMING = "upcoming"
+    PAST = "past"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -46,6 +50,26 @@ class UserInterest(Base):
     category = Column(String, nullable=False)
 
     user = relationship("User", back_populates="interest_records")
+
+
+class Trip(Base):
+    __tablename__ = "trips"
+
+    id = Column(Integer, primary_key=True, index=True)
+    destination = Column(String, nullable=False)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+    duration_days = Column(Integer, nullable=False)
+    summary = Column(Text, nullable=False)
+    itinerary_json = Column(Text, nullable=False)
+    created_at = Column(DateTime, nullable=False)
+    status = Column(SQLEnum(TripStatus), nullable=False)
+
+    @property
+    def itinerary(self) -> dict:
+        import json
+
+        return json.loads(self.itinerary_json)
 
 
 def create_all_tables() -> None:
