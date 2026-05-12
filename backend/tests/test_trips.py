@@ -70,7 +70,7 @@ class TestSavedTrips:
 
         duplicate_response = client.post("/trips/save", json=payload)
         assert duplicate_response.status_code == 409
-        assert "already saved" in duplicate_response.json()["detail"].lower()
+        assert "has already been saved" in duplicate_response.json()["detail"].lower()
 
     def test_invalid_trip_id_returns_404(self, client: TestClient):
         response = client.get("/trips/999")
