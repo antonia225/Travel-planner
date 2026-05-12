@@ -13,7 +13,7 @@ class OllamaTravelAIAgent(TravelAIAgent):
 
     def __init__(self) -> None:
         """Initialize the Ollama agent with configuration from environment variables."""
-        self.base_url: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        self.base_url: str = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
         self.model: str = os.getenv("OLLAMA_MODEL", "llama3")
         self.fallback_model: str = os.getenv("OLLAMA_FALLBACK_MODEL", "phi3")
         self._client = ollama.Client(host=self.base_url)
