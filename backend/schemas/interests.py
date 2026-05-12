@@ -67,3 +67,24 @@ class InterestCategoriesResponse(BaseModel):
 
     categories: list[str]
     descriptions: dict[str, str]
+
+
+class UserInterestRequest(BaseModel):
+    """Request body for adding a single interest to a user."""
+
+    category: InterestCategory
+
+
+class UserInterestResponse(BaseModel):
+    """Single user-interest record returned from the API."""
+
+    id: int
+    user_id: int
+    category: InterestCategory
+
+
+class UserInterestsResponse(BaseModel):
+    """All interest categories for a given user."""
+
+    user_id: int
+    categories: list[InterestCategory] = Field(default_factory=list)

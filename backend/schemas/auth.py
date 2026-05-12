@@ -1,12 +1,17 @@
 import re
 
+from typing import Optional
+
 from pydantic import BaseModel, EmailStr, Field, field_validator
+
+from schemas.interests import InterestCategory
 
 
 class RegisterRequest(BaseModel):
     name: str
     email: EmailStr
     password: str
+    interests: Optional[list[InterestCategory]] = None
 
     @field_validator("password")
     @classmethod

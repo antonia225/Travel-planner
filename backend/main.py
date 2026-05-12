@@ -1,11 +1,18 @@
-from fastapi import Depends, FastAPI, HTTPException, status
+import asyncio
+import hmac
+import os
+
+import httpx
+from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database import get_db
 from dependencies.auth import get_current_user
-from models import User, create_all_tables
+from models import User, UserInterestCategory, create_all_tables
+from repositories.user_interest_repository import UserInterestRepository
 from repositories.user_repository import UserRepository
 from schemas.auth import (
     LoginRequest,
@@ -14,7 +21,14 @@ from schemas.auth import (
     TokenResponse,
     UserProfile,
 )
-from schemas.interests import InterestCategoriesResponse, InterestCategory, UserInterests
+from schemas.interests import (
+    InterestCategoriesResponse,
+    InterestCategory,
+    UserInterestRequest,
+    UserInterestResponse,
+    UserInterests,
+    UserInterestsResponse,
+)
 from schemas.itinerary import ItineraryResponse
 from services.architect_service import generate_itinerary
 from services.auth_service import (
