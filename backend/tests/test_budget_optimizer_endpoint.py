@@ -115,5 +115,5 @@ def test_optimize_budget_returns_422_on_upstream_http_error(client, monkeypatch)
     )
 
     assert response.status_code == 422
-    assert "Budget optimizer request failed" in response.json()["detail"]
+    assert "Ollama returned an error: 500" in response.json()["detail"]
     assert captured["url"] == _OLLAMA_GENERATE_URL
