@@ -15,20 +15,29 @@ class UserRepository:
     def get_by_id(self, user_id: int) -> Optional[User]:
         return self._db.query(User).filter(User.id == user_id).first()
 
-    def create(self, email: str, hashed_password: str, name: str) -> User:
-        user = User(email=email, hashed_password=hashed_password, name=name)
+    def create(
+        self,
+        email: str,
+        hashed_password: str,
+        name: str,
+        interests: list[str] | None = None,
+    ) -> User:
+        user = User(
+            email=email,
+            hashed_password=hashed_password,
+            name=name,
+            interests=interests or [],
+        )
         self._db.add(user)
         self._db.commit()
         self._db.refresh(user)
         return user
 
-    def update(self, user: User, name: Optional[str] = None, email: Optional[str] = None) -> User:
-        if name is not None:
-            user.name = name
-
-        if email is not None:
-            user.email = email
-
-        self._db.commit()
-        self._db.refresh(user)
+    def update_interests(self, user_id: int, interests: list[str]) -> Optional[User]:
+        """Update user's interests and return updated user."""
+        user = self.get_by_id(user_id)
+        if user:
+            user.interests = interests
+            self._db.commit()
+            self._db.refresh(user)
         return user

@@ -1,25 +1,43 @@
 import asyncio
-import bcrypt
 import hmac
 import os
-import re
+
 import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
-from services.ai_service import check_ollama_connection
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import create_all_tables, UserInterestCategory
-from repositories.user_repository import UserRepository
+from dependencies.auth import get_current_user
+from models import User, UserInterestCategory, create_all_tables
 from repositories.user_interest_repository import UserInterestRepository
+from repositories.user_repository import UserRepository
+from schemas.auth import (
+    LoginRequest,
+    RegisterRequest,
+    RegisterResponse,
+    TokenResponse,
+    UserProfile,
+)
+from schemas.interests import (
+    InterestCategoriesResponse,
+    InterestCategory,
+    UserInterestRequest,
+    UserInterestResponse,
+    UserInterests,
+    UserInterestsResponse,
+)
 from schemas.itinerary import ItineraryResponse
-from services.architect_service import generate_itinerary
-
 from schemas.budget import BudgetOptimizerResponse
+from services.architect_service import generate_itinerary
 from services.budget_optimizer_service import generate_budget_plan
+from services.auth_service import (
+    create_access_token,
+    hash_password,
+    verify_password,
+)
 
 app = FastAPI(title="AI Travel Planner API")
 
@@ -83,78 +101,9 @@ app.add_middleware(
 )
 
 
-def _hash_password(plain: str) -> str:
-    return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
-
-
-def _verify_password(plain: str, hashed: str) -> bool:
-    return bcrypt.checkpw(plain.encode(), hashed.encode())
-
-
 @app.on_event("startup")
 def on_startup() -> None:
     create_all_tables()
-
-
-# ---------- Schemas ----------
-
-class RegisterRequest(BaseModel):
-    name: str
-    email: EmailStr
-    password: str
-    interests: list[UserInterestCategory] = []
-
-    @field_validator("password")
-    @classmethod
-    def validate_password_strength(cls, v: str) -> str:
-        errors: list[str] = []
-        if len(v) < 8:
-            errors.append("at least 8 characters")
-        if not re.search(r"[A-Z]", v):
-            errors.append("one uppercase letter (A–Z)")
-        if not re.search(r"[a-z]", v):
-            errors.append("one lowercase letter (a–z)")
-        if not re.search(r"[0-9]", v):
-            errors.append("one number (0–9)")
-        if errors:
-            raise ValueError("Password must contain: " + ", ".join(errors))
-        return v
-
-
-class RegisterResponse(BaseModel):
-    id: int
-    name: str
-    email: str
-
-class LoginRequest(BaseModel):
-    email: EmailStr
-    password: str
-
-class ProfileUpdateRequest(BaseModel):
-    name: str | None = None
-    email: EmailStr | None = None
-
-
-class UserInterestRequest(BaseModel):
-    category: UserInterestCategory
-
-
-class UserInterestResponse(BaseModel):
-    id: int
-    user_id: int
-    category: UserInterestCategory
-
-    class Config:
-        from_attributes = True
-
-
-class UserInterestsResponse(BaseModel):
-    user_id: int
-    categories: list[UserInterestCategory]
-
-class BudgetOptimizerRequest(BaseModel):
-    destination: str
-    budget: int
 
 
 # ---------- Routes ----------
@@ -180,7 +129,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> Registe
             detail="A user with this email already exists.",
         )
 
-    hashed = _hash_password(payload.password)
+    hashed = hash_password(payload.password)
     user = repo.create(email=payload.email, hashed_password=hashed, name=payload.name)
     
     # Save user interests if provided
@@ -189,75 +138,89 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> Registe
     
     return RegisterResponse(id=user.id, email=user.email, name=user.name)
 
-@app.post("/login", response_model=RegisterResponse)
-def login(payload: LoginRequest, db: Session = Depends(get_db)) -> RegisterResponse:
-    repo = UserRepository(db)
 
+@app.post("/login", response_model=TokenResponse)
+def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+    repo = UserRepository(db)
     user = repo.get_by_email(payload.email)
-    if not user or not _verify_password(payload.password, user.hashed_password):
+
+    if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password.",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
-    return RegisterResponse(
-        id=user.id,
-        name=user.name,
-        email=user.email,
+    access_token = create_access_token(
+        data={
+            "sub": str(user.id),
+            "email": user.email,
+            "role": "user",
+        }
+    )
+    return TokenResponse(access_token=access_token)
+
+
+@app.get("/me", response_model=UserProfile)
+def read_current_user(current_user: User = Depends(get_current_user)) -> UserProfile:
+    return UserProfile(
+        id=current_user.id,
+        name=current_user.name,
+        email=current_user.email,
+        interests=current_user.interests or [],
     )
 
-def require_profile_update_authorization(
-    admin_token: str | None = Header(default=None, alias="X-Admin-Token"),
-) -> None:
-    expected_admin_token = os.getenv("PROFILE_UPDATE_ADMIN_TOKEN")
-    if not expected_admin_token:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Profile update authorization is not configured.",
-        )
 
-    if not admin_token or not hmac.compare_digest(admin_token, expected_admin_token):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authorized to update user profiles.",
-        )
-
-
-@app.patch("/users/{user_id}/profile", response_model=RegisterResponse)
-def update_profile(
-    user_id: int,
-    payload: ProfileUpdateRequest,
+@app.put("/me/interests", response_model=UserProfile)
+def update_user_interests(
+    payload: UserInterests,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-    _: None = Depends(require_profile_update_authorization),
-) -> RegisterResponse:
+) -> UserProfile:
+    """Update current user's travel interests."""
     repo = UserRepository(db)
+    interests_list = [interest.value for interest in payload.interests]
+    updated_user = repo.update_interests(current_user.id, interests_list)
 
-    user = repo.get_by_id(user_id)
-    if not user:
+    if not updated_user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found.",
         )
 
-    if payload.email is not None:
-        existing_user = repo.get_by_email(payload.email)
-        if existing_user and existing_user.id != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="A user with this email already exists.",
-            )
-
-    updated_user = repo.update(
-        user=user,
-        name=payload.name,
-        email=payload.email,
-    )
-
-    return RegisterResponse(
+    return UserProfile(
         id=updated_user.id,
         name=updated_user.name,
         email=updated_user.email,
+        interests=updated_user.interests or [],
     )
+
+
+@app.get("/interests/categories")
+def list_interest_categories() -> InterestCategoriesResponse:
+    """List all available interest categories for travel planning."""
+    return {
+        "categories": [interest.value for interest in InterestCategory],
+        "descriptions": {
+            "adventure": "Hiking, climbing, extreme sports",
+            "water_sports": "Diving, surfing, kayaking",
+            "nature_wildlife": "Safaris, birdwatching, national parks",
+            "culture_history": "Museums, historical sites, heritage",
+            "photography": "Photography-focused trips",
+            "spiritual_religious": "Religious sites, meditation",
+            "food_culinary": "Food tours, cooking classes, local cuisine",
+            "fine_dining": "Upscale restaurants, wine tasting",
+            "relaxation_wellness": "Spas, yoga, wellness retreats",
+            "beach": "Beach relaxation, coastal activities",
+            "shopping": "Markets, boutiques, local shopping",
+            "nightlife": "Clubs, bars, nightlife scene",
+            "entertainment": "Theater, concerts, shows",
+            "budget_conscious": "Budget accommodations, cheap eats",
+            "luxury": "High-end hotels, premium experiences",
+            "eco_tourism": "Sustainable travel, eco-lodges",
+            "family_friendly": "Family activities, kid-friendly",
+        },
+    }
 
 
 # ---------- Itinerary ----------
@@ -267,18 +230,28 @@ class ItineraryRequest(BaseModel):
     num_days: int
 
 
+class BudgetOptimizerRequest(BaseModel):
+    destination: str
+    budget: int
+
+
 @app.post("/generate-itinerary", response_model=ItineraryResponse)
-async def create_itinerary(payload: ItineraryRequest) -> ItineraryResponse:
+async def create_itinerary(
+    payload: ItineraryRequest,
+    current_user: User = Depends(get_current_user),
+) -> ItineraryResponse:
     try:
         return await generate_itinerary(
             destination=payload.destination,
             days=payload.num_days,
+            user_interests=current_user.interests or [],
         )
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
         ) from exc
+
 
 @app.post("/optimize-budget", response_model=BudgetOptimizerResponse)
 async def optimize_budget(payload: BudgetOptimizerRequest) -> BudgetOptimizerResponse:
@@ -292,6 +265,7 @@ async def optimize_budget(payload: BudgetOptimizerRequest) -> BudgetOptimizerRes
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
         ) from exc
+
 
 # ---------- User Interests Routes ----------
 
