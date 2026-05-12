@@ -1,17 +1,46 @@
-# AI Travel Planner
+# ✈️ AI Travel Planner
 
-AI Travel Planner is a university software project with a React Native mobile app and a FastAPI backend. The backend runs in Docker and integrates with Ollama for local AI model inference. The setup is designed so teammates can install frontend dependencies once, then run the backend stack with Docker Compose.
+> *Your personal AI travel buddy — no agency fees, no boring itineraries.*
 
-## Prerequisites
+Ever stared at a blank browser tab trying to plan a trip? We've got you. Just tell the app where you want to go and for how long, and the AI does the rest — personalised day-by-day itineraries, smart budget breakdowns, and a place to save all your dream trips.
 
-- Node.js (LTS recommended)
-- Docker Desktop
-- Expo Go app on your phone
-- Python is **not** required on your local machine
+---
 
-## Setup After Cloning
+## What Can It Do?
 
-1. Install frontend dependencies (one time only):
+| Feature | Description |
+|---------|-------------|
+| 🗺️ **Itinerary Generator** | Tell it your destination + how many days — get a full trip plan back in seconds |
+| 💸 **Budget Optimiser** | Enter your total budget and let AI figure out where to splurge and where to save |
+| 📌 **Saved Trips** | Save your generated trips and browse them later — upcoming and past |
+| 🎯 **Travel Interests** | Pick what you're into (food, adventure, beaches, nightlife…) for personalised results |
+| 🔐 **Auth** | Secure accounts so your trips are yours |
+
+---
+
+## What's Under the Hood?
+
+- **React Native + Expo** — works on iOS & Android
+- **FastAPI** — snappy Python backend
+- **Ollama** — AI runs *locally* on your machine, no API keys needed
+- **Docker** — one command spins up everything
+- **Prometheus + Grafana** — monitoring dashboards included
+
+---
+
+## Getting Started
+
+### You'll need
+
+- **Node.js** (LTS)
+- **Docker Desktop**
+- **Expo Go** app on your phone
+
+> Python is not required — Docker handles it all.
+
+---
+
+### Step 1 — Install frontend packages
 
 ```bash
 cd frontend
@@ -19,49 +48,93 @@ npm install
 cd ..
 ```
 
-2. Create backend environment file from the template:
+### Step 2 — Set up the environment file
 
-Mac/Linux:
-
+**Mac / Linux:**
 ```bash
 cp backend/.env.example backend/.env
 ```
 
-Windows PowerShell:
-
+**Windows:**
 ```powershell
 Copy-Item backend/.env.example backend/.env
 ```
 
-3. Start backend + Ollama from the repository root:
+### Step 3 — Fire up the backend
 
 ```bash
 docker compose up
 ```
 
-4. Start Expo from `frontend/`:
+This starts the API, the AI models, and the monitoring stack. The **first run downloads the AI models** so grab a coffee — it might take a few minutes. ☕
+
+### Step 4 — Start the app
 
 ```bash
 cd frontend
 npm start
 ```
 
-5. Scan the QR code with Expo Go.
+Scan the QR code with **Expo Go** and you're live!
 
-## Physical Device API URL Note
+---
 
-When testing on a physical phone, update `frontend/src/services/api.ts` and replace `http://localhost:8000` with your computer's local IP, for example `http://192.168.1.X:8000`.
+## Testing on a Real Phone?
 
-Find your local IP:
+Your phone can't reach `localhost` on your computer, so you need to swap in your local IP address.
 
-Mac:
-
+Find it with:
 ```bash
+# Mac / Linux
 ifconfig
-```
 
-Windows:
-
-```powershell
+# Windows
 ipconfig
 ```
+
+Then open `frontend/src/services/api.ts` and change:
+```
+http://localhost:8000  →  http://192.168.1.YOUR_IP:8000
+```
+
+---
+
+## Services & Ports
+
+| Service | URL | What's there |
+|---------|-----|-------------|
+| API | `localhost:8000` | Backend + interactive docs at `/docs` |
+| Ollama | `localhost:11434` | Local AI inference |
+| Grafana | `localhost:3000` | Dashboards (`admin` / `admin`) |
+| Prometheus | `localhost:9090` | Raw metrics |
+
+---
+
+## Running Tests
+
+**Backend:**
+```bash
+docker compose exec backend pytest
+```
+
+**Frontend:**
+```bash
+cd frontend
+npm test
+```
+
+---
+
+## Project Layout
+
+```
+Travel-planner/
+├── backend/          FastAPI app, AI services, database
+├── frontend/         React Native / Expo app
+├── monitoring/       Prometheus + Grafana config
+└── docker-compose.yml
+```
+
+---
+
+*Built with ❤️ as a university project.*
