@@ -30,7 +30,9 @@ from schemas.interests import (
     UserInterestsResponse,
 )
 from schemas.itinerary import ItineraryResponse
+from schemas.budget import BudgetOptimizerResponse
 from services.architect_service import generate_itinerary
+from services.budget_optimizer_service import generate_budget_plan
 from services.auth_service import (
     create_access_token,
     hash_password,
@@ -228,6 +230,11 @@ class ItineraryRequest(BaseModel):
     num_days: int
 
 
+class BudgetOptimizerRequest(BaseModel):
+    destination: str
+    budget: int
+
+
 @app.post("/generate-itinerary", response_model=ItineraryResponse)
 async def create_itinerary(
     payload: ItineraryRequest,
@@ -238,6 +245,20 @@ async def create_itinerary(
             destination=payload.destination,
             days=payload.num_days,
             user_interests=current_user.interests or [],
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+
+@app.post("/optimize-budget", response_model=BudgetOptimizerResponse)
+async def optimize_budget(payload: BudgetOptimizerRequest) -> BudgetOptimizerResponse:
+    try:
+        return await generate_budget_plan(
+            destination=payload.destination,
+            budget=payload.budget,
         )
     except ValueError as exc:
         raise HTTPException(
