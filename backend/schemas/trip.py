@@ -54,13 +54,14 @@ class TripListResponse(BaseModel):
     destination: str
     startDate: date = Field(..., alias="start_date")
     endDate: date = Field(..., alias="end_date")
-    numberOfDays: int = Field(..., alias="duration_days")
+    duration_days: int = Field(..., alias="numberOfDays")
     summary: str
     createdAt: datetime = Field(..., alias="created_at")
     status: TripStatus
 
     model_config = {
         "from_attributes": True,
+        "populate_by_name": True,
     }
 
 
