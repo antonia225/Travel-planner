@@ -10,6 +10,7 @@ import os
 
 # Must precede all project imports so DatabaseSingleton picks up :memory:
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-that-is-at-least-32-chars!!")
 
 import pytest
 from fastapi.testclient import TestClient
