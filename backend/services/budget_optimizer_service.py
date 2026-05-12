@@ -72,8 +72,21 @@ async def generate_budget_plan(
                 json=payload,
             )
             response.raise_for_status()
-    except Exception as exc:
-        raise ValueError(f"Budget optimizer request failed: {exc}") from exc
+    except httpx.ReadTimeout as exc:
+        raise ValueError(
+            "The budget optimizer did not respond in time. The model may still be "
+            "loading or the prompt is too large. Try again in a moment."
+        ) from exc
+    except httpx.ConnectError as exc:
+        raise ValueError(
+            f"Could not connect to Ollama at {OLLAMA_BASE_URL}. "
+            "Make sure the ollama service is running."
+        ) from exc
+    except httpx.HTTPStatusError as exc:
+        raise ValueError(
+            f"Ollama returned an error: {exc.response.status_code} "
+            f"{exc.response.text[:200]}"
+        ) from exc
 
     raw_body = response.json()
     raw_text: str = raw_body.get("response", "")
