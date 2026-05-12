@@ -130,9 +130,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error("An account with this email already exists");
       } else {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          (errorData as { detail?: string }).detail || "Registration failed"
-        );
+        const detail = (errorData as { detail?: unknown }).detail;
+        // Pydantic 422 returns detail as an array of validation error objects
+        const message =
+          typeof detail === "string"
+            ? detail
+            : Array.isArray(detail)
+            ? detail.map((e: { msg?: string }) => e.msg ?? "").join("; ")
+            : "Registration failed";
+        throw new Error(message);
       }
     } catch (error) {
       throw error;
