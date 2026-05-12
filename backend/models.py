@@ -8,6 +8,22 @@ class Base(DeclarativeBase):
     pass
 
 
+class UserInterestCategory(str, Enum):
+    """User interest categories for travel personalization"""
+    ADVENTURE = "adventure"
+    CULTURAL = "cultural"
+    CULINARY = "culinary"
+    NATURE = "nature"
+    WELLNESS = "wellness"
+    NIGHTLIFE = "nightlife"
+    SHOPPING = "shopping"
+    FAMILY = "family"
+    LUXURY = "luxury"
+    SPIRITUAL = "spiritual"
+    PHOTOGRAPHY = "photography"
+    BUDGET = "budget"
+
+
 class User(Base):
     __tablename__ = "users"
 
