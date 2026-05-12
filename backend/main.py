@@ -4,6 +4,7 @@ import hmac
 import os
 import re
 import httpx
+from datetime import date
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -17,7 +18,7 @@ from repositories.trip_repository import TripRepository
 from repositories.user_repository import UserRepository
 from repositories.user_interest_repository import UserInterestRepository
 from schemas.itinerary import ItineraryResponse
-from schemas.trip import SaveTripRequest, TripDetailsResponse, TripListResponse
+from schemas.trip import SaveTripRequest, TripDetailsResponse, TripListResponse, TripStatus
 from services.architect_service import generate_itinerary
 
 app = FastAPI(title="AI Travel Planner API")
@@ -208,6 +209,9 @@ def save_trip(payload: SaveTripRequest, db: Session = Depends(get_db)) -> TripDe
             detail="This trip has already been saved.",
         )
 
+    # Determine status based on end date if not provided
+    trip_status = payload.status or (TripStatus.PAST if payload.endDate < date.today() else TripStatus.UPCOMING)
+
     trip = repo.create(
         destination=payload.destination,
         start_date=payload.startDate,
@@ -215,7 +219,7 @@ def save_trip(payload: SaveTripRequest, db: Session = Depends(get_db)) -> TripDe
         duration_days=payload.duration_days(),
         summary=payload.summary,
         itinerary=payload.itinerary.model_dump(),
-        status=payload.status,
+        status=trip_status,
     )
 
     return TripDetailsResponse.from_orm(trip)
