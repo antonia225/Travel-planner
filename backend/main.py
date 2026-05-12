@@ -13,9 +13,11 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import create_all_tables, UserInterestCategory
+from repositories.trip_repository import TripRepository
 from repositories.user_repository import UserRepository
 from repositories.user_interest_repository import UserInterestRepository
 from schemas.itinerary import ItineraryResponse
+from schemas.trip import SaveTripRequest, TripDetailsResponse, TripListResponse
 from services.architect_service import generate_itinerary
 
 app = FastAPI(title="AI Travel Planner API")
@@ -194,6 +196,45 @@ async def create_itinerary(payload: ItineraryRequest) -> ItineraryResponse:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
         ) from exc
+
+
+@app.post("/trips/save", response_model=TripDetailsResponse, status_code=status.HTTP_201_CREATED)
+def save_trip(payload: SaveTripRequest, db: Session = Depends(get_db)) -> TripDetailsResponse:
+    repo = TripRepository(db)
+
+    if repo.exists_by_details(payload.destination, payload.startDate, payload.endDate):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This trip has already been saved.",
+        )
+
+    trip = repo.create(
+        destination=payload.destination,
+        start_date=payload.startDate,
+        end_date=payload.endDate,
+        duration_days=payload.duration_days(),
+        summary=payload.summary,
+        itinerary=payload.itinerary.model_dump(),
+        status=payload.status,
+    )
+
+    return TripDetailsResponse.from_orm(trip)
+
+
+@app.get("/trips/saved", response_model=list[TripListResponse])
+def list_saved_trips(db: Session = Depends(get_db)) -> list[TripListResponse]:
+    repo = TripRepository(db)
+    trips = repo.get_all()
+    return [TripListResponse.from_orm(trip) for trip in trips]
+
+
+@app.get("/trips/{trip_id}", response_model=TripDetailsResponse)
+def get_saved_trip(trip_id: int, db: Session = Depends(get_db)) -> TripDetailsResponse:
+    repo = TripRepository(db)
+    trip = repo.get_by_id(trip_id)
+    if not trip:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Saved trip not found.")
+    return TripDetailsResponse.from_orm(trip)
 
 
 # ---------- User Interests Routes ----------
