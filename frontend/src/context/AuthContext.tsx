@@ -6,6 +6,7 @@ export interface User {
   id: number;
   email: string;
   name: string;
+  interests: string[];
 }
 
 export interface AuthContextType {
@@ -92,6 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           id: meData.id as number,
           email: meData.email as string,
           name: meData.name as string,
+          interests: Array.isArray(meData.interests) ? meData.interests : [],
         };
 
         setToken(newToken);

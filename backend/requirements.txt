@@ -9,3 +9,4 @@ ollama
 bcrypt
 PyJWT
 prometheus-fastapi-instrumentator
+json-repair

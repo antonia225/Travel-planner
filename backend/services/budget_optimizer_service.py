@@ -1,6 +1,7 @@
 import json
 import os
 import httpx
+from json_repair import repair_json
 from pydantic import ValidationError
 
 from schemas.budget import BudgetOptimizerResponse
@@ -10,41 +11,77 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
 # Force Phi-3 for this specialized budget agent
 OLLAMA_MODEL = "phi3"
 
-SYSTEM_PROMPT = """You are an expert travel budget optimizer.
+SYSTEM_PROMPT = """You are a travel budget optimizer. Output ONLY a JSON object. No prose, no markdown.
 
-Your job is to generate affordable and realistic travel recommendations.
+The JSON must have exactly these three top-level keys:
+- "destination": string
+- "total_budget": integer
+- "recommendations": array of objects
 
-OUTPUT RULES:
-1. Output ONLY raw valid JSON.
-2. No markdown formatting.
-3. No explanations outside JSON.
-4. Use EXACTLY this structure:
+Each object in "recommendations" must have exactly these three keys:
+- "category": one short word (accommodation | transportation | food | activities)
+- "recommendation": one sentence describing what to do
+- "estimated_cost": a short cost string like "20 USD per night"
 
-{
-  "destination": "<destination>",
-  "total_budget": <integer>,
-  "recommendations": [
-    {
-      "category": "<category>",
-      "recommendation": "<specific recommendation>",
-      "estimated_cost": "<cost estimate>"
-    }
-  ]
-}
+Do NOT put long text in "category". Do NOT merge fields together. Do NOT add extra keys.
 
-5. Include recommendations for:
-- accommodation
-- transportation
-- food
-- activities
+Example of a valid single recommendation object:
+{"category": "accommodation", "recommendation": "Stay at a budget hostel.", "estimated_cost": "25 USD per night"}
 
-6. Recommendations must prioritize saving money while maintaining a good experience.
+Provide exactly 4 recommendation objects, one for each category.
 """
 
 USER_PROMPT_TEMPLATE = (
     "Generate budget travel recommendations for a trip to {destination} "
     "with a total budget of {budget} USD."
 )
+
+
+_REQUIRED_REC_FIELDS = {"category", "recommendation", "estimated_cost"}
+
+
+def _strip_keys(obj):
+    """Recursively strip whitespace from all dictionary keys."""
+    if isinstance(obj, dict):
+        return {k.strip(): _strip_keys(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_strip_keys(item) for item in obj]
+    return obj
+
+
+def _repair_recommendation(rec: dict) -> dict | None:
+    """
+    Recover a recommendation dict when phi3 merges a key with its value.
+    E.g. {'categorydeparture_point': '...', 'estimated_cost': '60 USD'}
+    → {'category': 'departure_point', 'recommendation': '...', 'estimated_cost': '60 USD'}
+
+    Returns None if the item cannot be meaningfully repaired.
+    """
+    if _REQUIRED_REC_FIELDS.issubset(rec.keys()):
+        # Drop items where category is suspiciously long (model hallucinated garbage)
+        if len(str(rec.get("category", ""))) > 40:
+            return None
+        return rec
+
+    repaired = dict(rec)
+
+    for field in ("category", "recommendation", "estimated_cost"):
+        if field in repaired:
+            continue
+        for key in list(repaired.keys()):
+            if key.startswith(field) and key != field:
+                extracted = key[len(field):].strip("_ ")
+                repaired[field] = extracted or key
+                repaired.pop(key, None)
+                break
+
+    if not _REQUIRED_REC_FIELDS.issubset(repaired.keys()):
+        return None
+
+    if len(str(repaired.get("category", ""))) > 40:
+        return None
+
+    return repaired
 
 
 async def generate_budget_plan(
@@ -93,13 +130,25 @@ async def generate_budget_plan(
 
     try:
         parsed = json.loads(raw_text)
-
         if isinstance(parsed, str):
             parsed = json.loads(parsed)
-    except json.JSONDecodeError as exc:
-        raise ValueError(
-            f"Phi-3 returned invalid JSON: {raw_text[:300]}"
-        ) from exc
+    except json.JSONDecodeError:
+        try:
+            parsed = json.loads(repair_json(raw_text))
+        except (json.JSONDecodeError, Exception) as exc:
+            raise ValueError(
+                f"Phi-3 returned invalid JSON that could not be repaired: {raw_text[:300]}"
+            ) from exc
+
+    parsed = _strip_keys(parsed)
+
+    if isinstance(parsed.get("recommendations"), list):
+        repaired = [
+            _repair_recommendation(r)
+            for r in parsed["recommendations"]
+            if isinstance(r, dict)
+        ]
+        parsed["recommendations"] = [r for r in repaired if r is not None]
 
     try:
         return BudgetOptimizerResponse.model_validate(parsed)
