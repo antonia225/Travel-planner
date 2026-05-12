@@ -35,17 +35,32 @@ OUTPUT RULES — follow these without exception:
 
 USER_PROMPT_TEMPLATE = (
     "Generate a detailed {days}-day travel itinerary for {destination}. "
+    "{interests_note}"
     "Remember: output only the raw JSON, no markdown, no extra text."
 )
 
 
-async def generate_itinerary(destination: str, days: int) -> ItineraryResponse:
+async def generate_itinerary(
+    destination: str,
+    days: int,
+    user_interests: list[str] | None = None,
+) -> ItineraryResponse:
     """
     Sends a structured prompt to the local Ollama instance and returns a
-    validated ItineraryResponse.  Raises ValueError on parse/validation failure
-    and httpx.HTTPStatusError on non-2xx responses.
+    validated ItineraryResponse. Personalizes itinerary based on user interests.
+    Raises ValueError on parse/validation failure and httpx.HTTPStatusError on non-2xx responses.
     """
-    user_message = USER_PROMPT_TEMPLATE.format(days=days, destination=destination)
+    # Build interests note for prompt
+    interests_note = ""
+    if user_interests:
+        interests_str = ", ".join(user_interests)
+        interests_note = f"The traveler is interested in: {interests_str}. Prioritize activities aligned with these interests. "
+
+    user_message = USER_PROMPT_TEMPLATE.format(
+        days=days,
+        destination=destination,
+        interests_note=interests_note,
+    )
 
     payload = {
         "model": OLLAMA_MODEL,

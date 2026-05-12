@@ -27,11 +27,20 @@ def generate_travel_plan(user_prompt: str) -> str:
 
     try:
         agent = AIAgentFactory.create_agent()
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="AI agent configuration is invalid.",
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Unexpected AI service failure.") from exc
+
+    try:
         return agent.generate(prompt)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except ConnectionError as e:
-        raise HTTPException(status_code=502, detail=f"AI service unavailable: {str(e)}") from e
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ConnectionError as exc:
+        raise HTTPException(status_code=502, detail=f"AI service unavailable: {str(exc)}") from exc
     except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout) as exc:
         raise HTTPException(status_code=503, detail="Could not connect to Ollama service.") from exc
     except Exception as exc:
