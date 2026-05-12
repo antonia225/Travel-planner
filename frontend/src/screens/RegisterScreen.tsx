@@ -61,7 +61,7 @@ export default function RegisterScreen({
 }: {
   onSwitchToLogin: () => void;
 }) {
-  const { register, isLoading } = useAuth();
+  const { register } = useAuth();
 
   const [name,           setName]           = useState("");
   const [email,          setEmail]          = useState("");

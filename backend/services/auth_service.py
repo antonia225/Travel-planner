@@ -6,7 +6,17 @@ import bcrypt
 import jwt
 from jwt import ExpiredSignatureError, InvalidTokenError
 
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change-me-in-production")
+
+def _get_jwt_secret_key() -> str:
+    secret = os.getenv("JWT_SECRET_KEY", "").strip()
+    if not secret:
+        raise RuntimeError("JWT_SECRET_KEY environment variable must be set.")
+    if len(secret) < 32:
+        raise RuntimeError("JWT_SECRET_KEY must be at least 32 characters long.")
+    return secret
+
+
+JWT_SECRET_KEY = _get_jwt_secret_key()
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_ACCESS_TOKEN_EXPIRE_SECONDS = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_SECONDS", "3600"))
 
