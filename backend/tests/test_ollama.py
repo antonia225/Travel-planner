@@ -1,3 +1,4 @@
+import ollama
 import pytest
 from unittest.mock import patch
 from fastapi import HTTPException
@@ -73,7 +74,7 @@ def test_generate_travel_plan_retries_with_fallback_model_on_primary_404(monkeyp
         def generate(self, model: str, prompt: str, stream: bool = False) -> dict[str, str]:
             calls.append(model)
             if model == "llama3":
-                raise ConnectionError("model not found")
+                raise ollama.ResponseError("model not found", 404)
             return {"response": "Fallback plan generated."}
 
     monkeypatch.setenv("OLLAMA_BASE_URL", "http://ollama:11434")
@@ -88,13 +89,37 @@ def test_generate_travel_plan_retries_with_fallback_model_on_primary_404(monkeyp
         assert calls == ["llama3", "phi3"]
 
 
-def test_generate_travel_plan_surfaces_non_404_model_errors_as_502(monkeypatch):
+def test_generate_travel_plan_surfaces_non_404_response_errors_as_500(monkeypatch):
+    """Non-404 ollama.ResponseError → agent raises RuntimeError → HTTP 500."""
+
     class FakeClient:
         def __init__(self, host: str):
             self.host = host
 
         def generate(self, model: str, prompt: str, stream: bool = False) -> dict[str, str]:
-            raise ConnectionError("internal model error")
+            raise ollama.ResponseError("internal model error", 500)
+
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://ollama:11434")
+    monkeypatch.setenv("OLLAMA_MODEL", "llama3")
+    monkeypatch.setenv("OLLAMA_FALLBACK_MODEL", "phi3")
+    monkeypatch.setenv("AI_AGENT_PROVIDER", "ollama")
+
+    with patch("agents.ollama_agent.ollama.Client", FakeClient):
+        with pytest.raises(HTTPException) as exc_info:
+            ai_service.generate_travel_plan("Plan 2 days in Milan")
+
+        assert exc_info.value.status_code == 500
+
+
+def test_generate_travel_plan_surfaces_connection_errors_as_502(monkeypatch):
+    """ConnectionError on both primary and fallback → HTTP 502."""
+
+    class FakeClient:
+        def __init__(self, host: str):
+            self.host = host
+
+        def generate(self, model: str, prompt: str, stream: bool = False) -> dict[str, str]:
+            raise ConnectionError("connection refused")
 
     monkeypatch.setenv("OLLAMA_BASE_URL", "http://ollama:11434")
     monkeypatch.setenv("OLLAMA_MODEL", "llama3")
