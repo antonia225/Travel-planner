@@ -140,6 +140,11 @@ async def generate_budget_plan(
                 f"Phi-3 returned invalid JSON that could not be repaired: {raw_text[:300]}"
             ) from exc
 
+    if not isinstance(parsed, dict):
+        raise ValueError(
+            f"Phi-3 returned invalid JSON: {raw_text[:300]}"
+        )
+
     parsed = _strip_keys(parsed)
 
     if isinstance(parsed.get("recommendations"), list):
