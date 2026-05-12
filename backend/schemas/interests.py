@@ -1,5 +1,5 @@
 from enum import Enum
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class InterestCategory(str, Enum):
@@ -59,4 +59,11 @@ class UserProfileWithInterests(BaseModel):
     id: int
     name: str
     email: str
-    interests: list[InterestCategory] = []
+    interests: list[InterestCategory] = Field(default_factory=list)
+
+
+class InterestCategoriesResponse(BaseModel):
+    """Response schema for the list-interest-categories endpoint."""
+
+    categories: list[str]
+    descriptions: dict[str, str]

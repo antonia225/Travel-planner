@@ -3,8 +3,12 @@ Unit tests for POST /register.
 
 The TestClient and isolated in-memory database are provided by conftest.py.
 """
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from fastapi.testclient import TestClient
+
+from schemas.itinerary import ItineraryResponse
 
 # ---------------------------------------------------------------------------
 # Shared fixtures / helpers
@@ -161,3 +165,69 @@ class TestInterests:
         assert "descriptions" in body
         assert "adventure" in body["categories"]
         assert len(body["categories"]) > 0
+
+
+_ITINERARY_PAYLOAD = {"destination": "Paris", "num_days": 2}
+
+_MOCK_ITINERARY = ItineraryResponse(
+    destination="Paris",
+    days=[
+        {
+            "day_number": 1,
+            "activities": [
+                {"title": "Eiffel Tower", "description": "Visit the tower", "time_slot": "09:00"},
+                {"title": "Louvre", "description": "Explore the museum", "time_slot": "13:00"},
+                {"title": "Seine cruise", "description": "Evening cruise", "time_slot": "19:00"},
+            ],
+        },
+        {
+            "day_number": 2,
+            "activities": [
+                {"title": "Montmartre", "description": "Explore the district", "time_slot": "10:00"},
+                {"title": "Sacré-Cœur", "description": "Visit the basilica", "time_slot": "11:30"},
+                {"title": "Local bistro", "description": "French dinner", "time_slot": "19:00"},
+            ],
+        },
+    ],
+)
+
+
+class TestGenerateItinerary:
+    def test_unauthenticated_request_returns_401(self, client: TestClient):
+        """Calling /generate-itinerary without a token must return 401."""
+        response = client.post("/generate-itinerary", json=_ITINERARY_PAYLOAD)
+
+        assert response.status_code == 401
+
+    def test_authenticated_request_passes_interests_to_service(self, client: TestClient):
+        """Authenticated request succeeds and forwards user interests to generate_itinerary."""
+        client.post("/register", json=_VALID_PAYLOAD)
+        login_response = client.post(
+            "/login",
+            json={"email": _VALID_PAYLOAD["email"], "password": _VALID_PAYLOAD["password"]},
+        )
+        token = login_response.json()["access_token"]
+
+        # Set interests so we can assert they are forwarded
+        client.put(
+            "/me/interests",
+            json={"interests": ["adventure", "food_culinary"]},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        with patch(
+            "main.generate_itinerary",
+            new_callable=AsyncMock,
+            return_value=_MOCK_ITINERARY,
+        ) as mock_generate:
+            response = client.post(
+                "/generate-itinerary",
+                json=_ITINERARY_PAYLOAD,
+                headers={"Authorization": f"Bearer {token}"},
+            )
+
+        assert response.status_code == 200
+        _call_kwargs = mock_generate.call_args.kwargs
+        assert _call_kwargs["destination"] == "Paris"
+        assert _call_kwargs["days"] == 2
+        assert set(_call_kwargs["user_interests"]) == {"adventure", "food_culinary"}

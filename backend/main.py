@@ -14,7 +14,7 @@ from schemas.auth import (
     TokenResponse,
     UserProfile,
 )
-from schemas.interests import InterestCategory, UserInterests
+from schemas.interests import InterestCategoriesResponse, InterestCategory, UserInterests
 from schemas.itinerary import ItineraryResponse
 from services.architect_service import generate_itinerary
 from services.auth_service import (
@@ -120,7 +120,7 @@ def update_user_interests(
 
 
 @app.get("/interests/categories")
-def list_interest_categories() -> dict[str, list[str]]:
+def list_interest_categories() -> InterestCategoriesResponse:
     """List all available interest categories for travel planning."""
     return {
         "categories": [interest.value for interest in InterestCategory],

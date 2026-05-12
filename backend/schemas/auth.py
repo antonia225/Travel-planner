@@ -1,6 +1,6 @@
 import re
 
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class RegisterRequest(BaseModel):
@@ -48,4 +48,4 @@ class UserProfile(BaseModel):
     id: int
     name: str
     email: EmailStr
-    interests: list[str] = []
+    interests: list[str] = Field(default_factory=list)

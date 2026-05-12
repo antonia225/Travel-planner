@@ -3,7 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BASE_URL } from "../services/api";
 
 export interface User {
-  id: string;
+  id: number;
   email: string;
   name: string;
 }
@@ -22,6 +22,25 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const TOKEN_KEY = "auth_token";
 const USER_KEY = "auth_user";
+const REQUEST_TIMEOUT_MS = 10_000;
+
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit = {}
+): Promise<Response> {
+  const controller = new AbortController();
+  const timerId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("Request timed out. Please check your connection and try again.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timerId);
+  }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -52,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${BASE_URL}/login`, {
+      const response = await fetchWithTimeout(`${BASE_URL}/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
@@ -60,11 +79,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (response.status === 200) {
         const data = await response.json();
-        const newToken = data.access_token;
+        const newToken: string = data.access_token;
+
+        const meResponse = await fetchWithTimeout(`${BASE_URL}/me`, {
+          headers: { Authorization: `Bearer ${newToken}` },
+        });
+        if (!meResponse.ok) {
+          throw new Error("Failed to fetch user profile after login");
+        }
+        const meData = await meResponse.json();
         const newUser: User = {
-          id: data.user.id,
-          email: data.user.email,
-          name: data.user.name,
+          id: meData.id as number,
+          email: meData.email as string,
+          name: meData.name as string,
         };
 
         setToken(newToken);
@@ -90,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = async (name: string, email: string, password: string) => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${BASE_URL}/register`, {
+      const response = await fetchWithTimeout(`${BASE_URL}/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, password }),
