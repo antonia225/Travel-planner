@@ -20,7 +20,6 @@ function AuthStack() {
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        animationEnabled: true,
       }}
     >
       {isLogin ? (
@@ -94,7 +93,7 @@ export default function App() {
   return (
     <AuthProvider>
       <RootNavigator />
-      <StatusBar barStyle="light-content" />
+      <StatusBar style="light" />
     </AuthProvider>
   );
 }
