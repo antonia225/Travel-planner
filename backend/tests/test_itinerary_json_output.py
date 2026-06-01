@@ -1,4 +1,4 @@
-import asyncio
+import json
 
 import pytest
 from fastapi.testclient import TestClient
@@ -6,55 +6,30 @@ from fastapi.testclient import TestClient
 import main
 from dependencies.auth import get_current_user
 from models import User
-from schemas.itinerary import ItineraryResponse
 from services import architect_service
 
 
-_SAMPLE_AI_ITINERARY = {
-    "destination": "Tokyo",
-    "days": [
-        {
-            "day_number": 1,
-            "activities": [
-                {
-                    "title": "Visit Senso-ji Temple",
-                    "description": "Explore Tokyo's oldest temple and the Nakamise shopping street.",
-                    "time_slot": "09:00 - 11:00",
-                },
-                {
-                    "title": "Lunch in Asakusa",
-                    "description": "Try local dishes near the temple district.",
-                    "time_slot": "12:00 - 13:30",
-                },
-                {
-                    "title": "Tokyo Skytree",
-                    "description": "Enjoy panoramic views of the city from the observation deck.",
-                    "time_slot": "15:00 - 17:00",
-                },
-            ],
-        },
-        {
-            "day_number": 2,
-            "activities": [
-                {
-                    "title": "Meiji Shrine",
-                    "description": "Walk through the forested shrine grounds in Harajuku.",
-                    "time_slot": "09:00 - 10:30",
-                },
-                {
-                    "title": "Takeshita Street",
-                    "description": "Discover fashion shops, snacks, and youth culture.",
-                    "time_slot": "11:00 - 13:00",
-                },
-                {
-                    "title": "Shibuya Crossing",
-                    "description": "Experience the famous crossing and surrounding shopping area.",
-                    "time_slot": "16:00 - 18:00",
-                },
-            ],
-        },
-    ],
-}
+def _sample_ai_itinerary(destination: str = "Tokyo", day_count: int = 2) -> dict:
+    return {
+        "destination": destination,
+        "days": [
+            {
+                "day_number": day_number,
+                "activities": [
+                    {
+                        "title": f"Day {day_number} activity {activity_number}",
+                        "description": (
+                            f"Detailed plan for activity {activity_number} "
+                            f"on day {day_number}."
+                        ),
+                        "time_slot": f"{8 + activity_number:02d}:00 - {9 + activity_number:02d}:00",
+                    }
+                    for activity_number in range(1, 4)
+                ],
+            }
+            for day_number in range(1, day_count + 1)
+        ],
+    }
 
 
 def _fake_current_user() -> User:
@@ -67,6 +42,38 @@ def _fake_current_user() -> User:
     )
 
 
+def _install_fake_ollama(
+    monkeypatch: pytest.MonkeyPatch,
+    ollama_response: dict,
+    captured_request: dict,
+) -> None:
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, str]:
+            return {"response": json.dumps(ollama_response)}
+
+    class FakeAsyncClient:
+        def __init__(self, timeout):
+            captured_request["timeout"] = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def post(self, url: str, json: dict):
+            captured_request["url"] = url
+            captured_request["payload"] = json
+            return FakeResponse()
+
+    monkeypatch.setattr(architect_service.httpx, "AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr(architect_service, "OLLAMA_BASE_URL", "http://ollama:11434")
+    monkeypatch.setattr(architect_service, "OLLAMA_MODEL", "llama3")
+
+
 @pytest.fixture(autouse=True)
 def override_auth_dependency():
     main.app.dependency_overrides[get_current_user] = _fake_current_user
@@ -74,22 +81,16 @@ def override_auth_dependency():
     main.app.dependency_overrides.pop(get_current_user, None)
 
 
-def test_generate_itinerary_endpoint_returns_valid_ai_json_structure(
+def test_generate_itinerary_endpoint_builds_daily_schedule_from_ollama_json(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    async def fake_generate_itinerary(
-        destination: str,
-        days: int,
-        user_interests: list[str] | None = None,
-    ) -> ItineraryResponse:
-        assert destination == "Tokyo"
-        assert days == 2
-        assert user_interests == ["culture_history", "food_culinary"]
-
-        return ItineraryResponse.model_validate(_SAMPLE_AI_ITINERARY)
-
-    monkeypatch.setattr(main, "generate_itinerary", fake_generate_itinerary)
+    captured_request = {}
+    _install_fake_ollama(
+        monkeypatch,
+        _sample_ai_itinerary(destination="Tokyo", day_count=2),
+        captured_request,
+    )
 
     response = client.post(
         "/generate-itinerary",
@@ -103,71 +104,96 @@ def test_generate_itinerary_endpoint_returns_valid_ai_json_structure(
     assert response.status_code == 200
 
     data = response.json()
-
     assert data["destination"] == "Tokyo"
-    assert "days" in data
-    assert isinstance(data["days"], list)
-    assert len(data["days"]) == 2
+    assert [day["day_number"] for day in data["days"]] == [1, 2]
 
-    first_day = data["days"][0]
-    assert first_day["day_number"] == 1
-    assert "activities" in first_day
-    assert isinstance(first_day["activities"], list)
-    assert len(first_day["activities"]) >= 3
+    for day in data["days"]:
+        assert len(day["activities"]) == 3
+        for activity in day["activities"]:
+            assert activity["title"]
+            assert activity["description"]
+            assert activity["time_slot"]
 
-    first_activity = first_day["activities"][0]
-    assert isinstance(first_activity["title"], str)
-    assert first_activity["title"]
-    assert isinstance(first_activity["description"], str)
-    assert first_activity["description"]
-    assert isinstance(first_activity["time_slot"], str)
-    assert first_activity["time_slot"]
-
-
-def test_generate_itinerary_service_accepts_valid_ai_json():
-    parsed = ItineraryResponse.model_validate(_SAMPLE_AI_ITINERARY)
-
-    assert parsed.destination == "Tokyo"
-    assert len(parsed.days) == 2
-    assert parsed.days[0].day_number == 1
-    assert len(parsed.days[0].activities) == 3
-    assert parsed.days[0].activities[0].title == "Visit Senso-ji Temple"
-    assert parsed.days[0].activities[0].time_slot == "09:00 - 11:00"
+    payload = captured_request["payload"]
+    assert captured_request["url"] == "http://ollama:11434/api/generate"
+    assert payload["model"] == "llama3"
+    assert payload["format"] == "json"
+    assert payload["stream"] is False
+    assert "Tokyo" in payload["prompt"]
+    assert "2-day travel itinerary" in payload["prompt"]
+    assert "culture_history" in payload["prompt"]
+    assert "food_culinary" in payload["prompt"]
 
 
-def test_generate_itinerary_service_rejects_day_with_too_few_activities():
-    invalid_itinerary = {
-        "destination": "Tokyo",
-        "days": [
+@pytest.mark.parametrize(
+    ("invalid_response", "expected_detail"),
+    [
+        (
             {
-                "day_number": 1,
-                "activities": [
+                "destination": "Tokyo",
+                "days": [
                     {
-                        "title": "Only activity",
-                        "description": "This should fail because the schema requires at least 3 activities.",
-                        "time_slot": "09:00 - 10:00",
+                        "day_number": 1,
+                        "activities": [
+                            {
+                                "title": "Only activity",
+                                "description": "This should fail.",
+                                "time_slot": "09:00 - 10:00",
+                            }
+                        ],
                     }
                 ],
-            }
-        ],
-    }
-
-    with pytest.raises(ValueError, match="at least 3 activities"):
-        ItineraryResponse.model_validate(invalid_itinerary)
-
-
-def test_generate_itinerary_endpoint_returns_422_when_ai_json_is_invalid(
+            },
+            "at least 3 activities",
+        ),
+        (
+            _sample_ai_itinerary(destination="Tokyo", day_count=1),
+            "exactly 2 days",
+        ),
+        (
+            {
+                **_sample_ai_itinerary(destination="Tokyo", day_count=2),
+                "days": [
+                    {
+                        **_sample_ai_itinerary(destination="Tokyo", day_count=2)["days"][0],
+                        "day_number": 2,
+                    },
+                    {
+                        **_sample_ai_itinerary(destination="Tokyo", day_count=2)["days"][1],
+                        "day_number": 1,
+                    },
+                ],
+            },
+            "sequential day numbers",
+        ),
+        (
+            {
+                **_sample_ai_itinerary(destination="Tokyo", day_count=2),
+                "days": [
+                    {
+                        **_sample_ai_itinerary(destination="Tokyo", day_count=2)["days"][0],
+                        "activities": [
+                            {
+                                **_sample_ai_itinerary(destination="Tokyo", day_count=2)["days"][0]["activities"][0],
+                                "time_slot": "morning",
+                            },
+                            *_sample_ai_itinerary(destination="Tokyo", day_count=2)["days"][0]["activities"][1:],
+                        ],
+                    },
+                    _sample_ai_itinerary(destination="Tokyo", day_count=2)["days"][1],
+                ],
+            },
+            "HH:MM - HH:MM",
+        ),
+    ],
+)
+def test_generate_itinerary_endpoint_rejects_invalid_daily_schedule_json(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
+    invalid_response: dict,
+    expected_detail: str,
 ):
-    async def fake_generate_itinerary(
-        destination: str,
-        days: int,
-        user_interests: list[str] | None = None,
-    ) -> ItineraryResponse:
-        raise ValueError("Ollama response did not match the expected itinerary schema.")
-
-    monkeypatch.setattr(main, "generate_itinerary", fake_generate_itinerary)
+    _install_fake_ollama(monkeypatch, invalid_response, {})
 
     response = client.post(
         "/generate-itinerary",
@@ -179,67 +205,43 @@ def test_generate_itinerary_endpoint_returns_422_when_ai_json_is_invalid(
     )
 
     assert response.status_code == 422
-    assert (
-        response.json()["detail"]
-        == "Ollama response did not match the expected itinerary schema."
-    )
+    assert expected_detail in response.json()["detail"]
 
 
-def test_architect_service_sends_json_format_request_to_ollama(
+def test_generate_itinerary_endpoint_rejects_non_json_ollama_text(
+    client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    async def run_test():
-        captured_request = {}
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
 
-        class FakeResponse:
-            def raise_for_status(self) -> None:
-                return None
+        def json(self) -> dict[str, str]:
+            return {"response": "Here is your itinerary: Day 1..."}
 
-            def json(self) -> dict[str, str]:
-                import json
+    class FakeAsyncClient:
+        def __init__(self, timeout):
+            return None
 
-                return {
-                    "response": json.dumps(_SAMPLE_AI_ITINERARY),
-                }
+        async def __aenter__(self):
+            return self
 
-        class FakeAsyncClient:
-            def __init__(self, timeout):
-                captured_request["timeout"] = timeout
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
 
-            async def __aenter__(self):
-                return self
+        async def post(self, url: str, json: dict):
+            return FakeResponse()
 
-            async def __aexit__(self, exc_type, exc, tb):
-                return None
+    monkeypatch.setattr(architect_service.httpx, "AsyncClient", FakeAsyncClient)
 
-            async def post(self, url: str, json: dict):
-                captured_request["url"] = url
-                captured_request["payload"] = json
-                return FakeResponse()
+    response = client.post(
+        "/generate-itinerary",
+        json={
+            "destination": "Tokyo",
+            "num_days": 2,
+        },
+        headers={"Authorization": "Bearer fake-test-token"},
+    )
 
-        monkeypatch.setattr(architect_service.httpx, "AsyncClient", FakeAsyncClient)
-        monkeypatch.setattr(
-            architect_service,
-            "OLLAMA_BASE_URL",
-            "http://ollama:11434",
-        )
-        monkeypatch.setattr(architect_service, "OLLAMA_MODEL", "llama3")
-
-        result = await architect_service.generate_itinerary(
-            destination="Tokyo",
-            days=2,
-            user_interests=["culture_history"],
-        )
-
-        assert result.destination == "Tokyo"
-        assert len(result.days) == 2
-
-        assert captured_request["url"] == "http://ollama:11434/api/generate"
-        assert captured_request["payload"]["model"] == "llama3"
-        assert captured_request["payload"]["format"] == "json"
-        assert captured_request["payload"]["stream"] is False
-        assert "Tokyo" in captured_request["payload"]["prompt"]
-        assert "2-day travel itinerary" in captured_request["payload"]["prompt"]
-        assert "culture_history" in captured_request["payload"]["prompt"]
-
-    asyncio.run(run_test())
+    assert response.status_code == 422
+    assert "non-JSON content" in response.json()["detail"]
