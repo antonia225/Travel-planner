@@ -26,6 +26,13 @@ class SaveTripRequest(BaseModel):
         "populate_by_name": True,
     }
 
+    @field_validator("startDate")
+    @classmethod
+    def validate_start_date_not_past(cls, value: date):
+        if value < date.today():
+            raise ValueError("startDate must not be in the past")
+        return value
+
     @field_validator("endDate")
     @classmethod
     def validate_date_order(cls, value: date, info):

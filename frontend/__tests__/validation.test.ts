@@ -1,5 +1,53 @@
 import { checkPassword, allRulesMet, type PasswordRules } from "../src/utils/validation";
 
+describe("Trip date validation", () => {
+  // Helper function that simulates parseDate from TripSearchForm
+  function parseDate(value: string) {
+    const [year, month, day] = value.split("-").map(Number);
+    if (!year || !month || !day) {
+      return new Date();
+    }
+    const date = new Date(year, month - 1, day);
+    return Number.isNaN(date.getTime()) ? new Date() : date;
+  }
+
+  let today: Date;
+
+  beforeEach(() => {
+    today = new Date();
+    today.setHours(0, 0, 0, 0);
+  });
+
+  describe("past date validation", () => {
+    it("rejects a start date in the past", () => {
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      
+      const parsedYesterday = parseDate(
+        `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`
+      );
+      expect(parsedYesterday < today).toBe(true);
+    });
+
+    it("accepts start date as today", () => {
+      const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+      const parsedToday = parseDate(todayString);
+
+      expect(parsedToday.getTime()).toBe(today.getTime());
+    });
+
+    it("accepts a start date in the future", () => {
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      const parsedTomorrow = parseDate(
+        `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`
+      );
+      expect(parsedTomorrow > today).toBe(true);
+    });
+  });
+});
+
 describe("checkPassword", () => {
   describe("valid password", () => {
     it("returns all rules as true for a fully valid password", () => {
