@@ -194,6 +194,10 @@ export default function TripSearchForm({ onSubmit }: Props) {
       nextErrors.destination = "Please enter a destination.";
     }
 
+    if (parseDate(startDate) < today) {
+      nextErrors.startDate = "Start date cannot be in the past.";
+    }
+
     if (isAfter(startDate, endDate)) {
       nextErrors.endDate = "End date must be after start date.";
     }

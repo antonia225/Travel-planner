@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import httpx
 from pydantic import ValidationError
 
@@ -7,6 +8,7 @@ from schemas.itinerary import ItineraryResponse
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3")
+TIME_SLOT_PATTERN = re.compile(r"^\d{2}:\d{2} - \d{2}:\d{2}$")
 
 SYSTEM_PROMPT = """You are an elite, highly structured travel architect.
 
@@ -38,6 +40,31 @@ USER_PROMPT_TEMPLATE = (
     "{interests_note}"
     "Remember: output only the raw JSON, no markdown, no extra text."
 )
+
+
+def _validate_daily_schedule(itinerary: ItineraryResponse, requested_days: int) -> None:
+    actual_days = len(itinerary.days)
+    if actual_days != requested_days:
+        raise ValueError(
+            f"Ollama response must include exactly {requested_days} days, "
+            f"but got {actual_days}."
+        )
+
+    expected_day_numbers = list(range(1, requested_days + 1))
+    actual_day_numbers = [day.day_number for day in itinerary.days]
+    if actual_day_numbers != expected_day_numbers:
+        raise ValueError(
+            "Ollama response must include sequential day numbers "
+            f"{expected_day_numbers}, but got {actual_day_numbers}."
+        )
+
+    for day in itinerary.days:
+        for activity in day.activities:
+            if not TIME_SLOT_PATTERN.fullmatch(activity.time_slot):
+                raise ValueError(
+                    "Ollama response activity time_slot must use HH:MM - HH:MM "
+                    f"format, but got {activity.time_slot!r}."
+                )
 
 
 async def generate_itinerary(
@@ -101,8 +128,11 @@ async def generate_itinerary(
         ) from exc
 
     try:
-        return ItineraryResponse.model_validate(parsed)
+        itinerary = ItineraryResponse.model_validate(parsed)
     except ValidationError as exc:
         raise ValueError(
             f"Ollama response did not match the expected itinerary schema: {exc}"
         ) from exc
+
+    _validate_daily_schedule(itinerary, requested_days=days)
+    return itinerary

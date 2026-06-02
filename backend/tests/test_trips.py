@@ -75,3 +75,46 @@ class TestSavedTrips:
     def test_invalid_trip_id_returns_404(self, client: TestClient):
         response = client.get("/trips/999")
         assert response.status_code == 404
+
+    def test_save_trip_with_past_start_date_returns_422(self, client: TestClient):
+        from datetime import timedelta
+        past_date = date.today() - timedelta(days=5)
+        payload = {
+            "destination": "Tokyo",
+            "startDate": str(past_date),
+            "endDate": str(date.today()),
+            "summary": "Past trip should fail.",
+            "itinerary": _SAMPLE_ITINERARY,
+        }
+
+        response = client.post("/trips/save", json=payload)
+        assert response.status_code == 422
+        assert "past" in response.json()["detail"][0]["msg"].lower()
+
+    def test_save_trip_with_today_start_date_succeeds(self, client: TestClient):
+        payload = {
+            "destination": "Barcelona",
+            "startDate": str(date.today()),
+            "endDate": str(date.today()),
+            "summary": "Today trip should succeed.",
+            "itinerary": _SAMPLE_ITINERARY,
+        }
+
+        response = client.post("/trips/save", json=payload)
+        assert response.status_code == 201
+        assert response.json()["destination"] == "Barcelona"
+
+    def test_save_trip_with_future_start_date_succeeds(self, client: TestClient):
+        from datetime import timedelta
+        future_date = date.today() + timedelta(days=30)
+        payload = {
+            "destination": "Sydney",
+            "startDate": str(future_date),
+            "endDate": str(future_date),
+            "summary": "Future trip should succeed.",
+            "itinerary": _SAMPLE_ITINERARY,
+        }
+
+        response = client.post("/trips/save", json=payload)
+        assert response.status_code == 201
+        assert response.json()["destination"] == "Sydney"
