@@ -58,8 +58,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const savedUser = await AsyncStorage.getItem(USER_KEY);
 
       if (savedToken && savedUser) {
+        const meResponse = await fetchWithTimeout(`${BASE_URL}/me`, {
+          headers: { Authorization: `Bearer ${savedToken}` },
+        });
+
+        if (!meResponse.ok) {
+          await AsyncStorage.removeItem(TOKEN_KEY);
+          await AsyncStorage.removeItem(USER_KEY);
+          return;
+        }
+
+        const meData = await meResponse.json();
+        const restoredUser: User = {
+          id: meData.id as number,
+          email: meData.email as string,
+          name: meData.name as string,
+        };
+
         setToken(savedToken);
-        setUser(JSON.parse(savedUser));
+        setUser(restoredUser);
+        await AsyncStorage.setItem(USER_KEY, JSON.stringify(restoredUser));
       }
     } catch (e) {
       console.error("Failed to restore session:", e);

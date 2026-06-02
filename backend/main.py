@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from dependencies.auth import get_current_user
 from models import User, UserInterestCategory, create_all_tables
+from repositories.saved_trip_repository import SavedTripRepository
 from repositories.trip_repository import TripRepository
 from repositories.user_interest_repository import UserInterestRepository
 from repositories.user_repository import UserRepository
@@ -30,6 +31,11 @@ from schemas.interests import (
     UserInterestResponse,
     UserInterests,
     UserInterestsResponse,
+)
+from schemas.saved_trip import (
+    RenameSavedTripRequest,
+    SaveGeneratedTripRequest,
+    SavedTripResponse,
 )
 from schemas.budget import BudgetOptimizerResponse
 from schemas.itinerary import ItineraryResponse
@@ -311,6 +317,70 @@ def get_saved_trip(trip_id: int, db: Session = Depends(get_db)) -> TripDetailsRe
     if not trip:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Saved trip not found.")
     return TripDetailsResponse.from_orm(trip)
+
+
+# ---------- Saved Trips Library ----------
+
+@app.post("/saved-trips", response_model=SavedTripResponse, status_code=status.HTTP_201_CREATED)
+def create_saved_trip(
+    payload: SaveGeneratedTripRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> SavedTripResponse:
+    repo = SavedTripRepository(db)
+    saved_trip = repo.create(
+        user_id=current_user.id,
+        name=payload.name,
+        trip_data=payload.trip_data,
+    )
+    return SavedTripResponse.model_validate(saved_trip)
+
+
+@app.get("/saved-trips", response_model=list[SavedTripResponse])
+def list_user_saved_trips(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[SavedTripResponse]:
+    repo = SavedTripRepository(db)
+    return [SavedTripResponse.model_validate(trip) for trip in repo.list_for_user(current_user.id)]
+
+
+@app.get("/saved-trips/{trip_id}", response_model=SavedTripResponse)
+def read_user_saved_trip(
+    trip_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> SavedTripResponse:
+    repo = SavedTripRepository(db)
+    saved_trip = repo.get_for_user(trip_id, current_user.id)
+    if not saved_trip:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Saved trip not found.")
+    return SavedTripResponse.model_validate(saved_trip)
+
+
+@app.patch("/saved-trips/{trip_id}", response_model=SavedTripResponse)
+def rename_user_saved_trip(
+    trip_id: int,
+    payload: RenameSavedTripRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> SavedTripResponse:
+    repo = SavedTripRepository(db)
+    saved_trip = repo.rename(trip_id, current_user.id, payload.name)
+    if not saved_trip:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Saved trip not found.")
+    return SavedTripResponse.model_validate(saved_trip)
+
+
+@app.delete("/saved-trips/{trip_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_user_saved_trip(
+    trip_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    repo = SavedTripRepository(db)
+    if not repo.delete(trip_id, current_user.id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Saved trip not found.")
 
 
 # ---------- User Interests Routes ----------
