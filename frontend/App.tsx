@@ -6,6 +6,7 @@ import { ActivityIndicator, View } from "react-native";
 
 import { AuthProvider, useAuth } from "./src/context/AuthContext";
 import HomeScreen from "./src/screens/HomeScreen";
+import LibraryScreen from "./src/screens/LibraryScreen";
 import LoginScreen from "./src/screens/LoginScreen";
 import RegisterScreen from "./src/screens/RegisterScreen";
 
@@ -54,6 +55,7 @@ function AppStack() {
       }}
     >
       <Stack.Screen name="Home" component={HomeScreen} />
+      <Stack.Screen name="Library" component={LibraryScreen} />
     </Stack.Navigator>
   );
 }

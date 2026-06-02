@@ -40,6 +40,7 @@ class User(Base):
     interests = Column(JSON, nullable=False, default=list)
 
     interest_records = relationship("UserInterest", back_populates="user", cascade="all, delete-orphan")
+    saved_trips = relationship("SavedTrip", back_populates="user", cascade="all, delete-orphan")
 
 
 class UserInterest(Base):
@@ -70,6 +71,25 @@ class Trip(Base):
         import json
 
         return json.loads(self.itinerary_json)
+
+
+class SavedTrip(Base):
+    __tablename__ = "saved_trips"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    trip_data_json = Column("trip_data", Text, nullable=False)
+    created_at = Column(DateTime, nullable=False)
+    updated_at = Column(DateTime, nullable=False)
+
+    user = relationship("User", back_populates="saved_trips")
+
+    @property
+    def trip_data(self) -> dict:
+        import json
+
+        return json.loads(self.trip_data_json)
 
 
 def create_all_tables() -> None:

@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
 import TripSearchForm from "../components/TripSearchForm";
-import { BASE_URL } from "../services/api";
+import { BASE_URL, saveGeneratedTrip } from "../services/api";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
@@ -62,6 +62,12 @@ type ItineraryResult = {
 
 type BackendErrorResponse = {
   detail?: unknown;
+};
+
+type Props = {
+  navigation: {
+    navigate: (screen: string) => void;
+  };
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -118,10 +124,12 @@ function formatBackendDetail(detail: unknown) {
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-export default function HomeScreen() {
+export default function HomeScreen({ navigation }: Props) {
   const { user, token, logout, isLoading } = useAuth();
 
   const [isGeneratingTrip, setIsGeneratingTrip] = useState(false);
+  const [isSavingTrip, setIsSavingTrip] = useState(false);
+  const [savedTripId, setSavedTripId] = useState<number | null>(null);
   const [itineraryResult, setItineraryResult] = useState<ItineraryResult | null>(
     null
   );
@@ -151,6 +159,7 @@ export default function HomeScreen() {
     try {
       setIsGeneratingTrip(true);
       setItineraryResult(null);
+      setSavedTripId(null);
       setTripError(null);
 
       console.log("BASE_URL:", BASE_URL);
@@ -205,6 +214,30 @@ export default function HomeScreen() {
     }
   };
 
+  const handleSaveGeneratedTrip = async () => {
+    if (!token || !itineraryResult) {
+      Alert.alert("Nothing to save", "Generate a trip before saving it.");
+      return;
+    }
+
+    const destination = itineraryResult.destination || "Generated trip";
+
+    try {
+      setIsSavingTrip(true);
+      const savedTrip = await saveGeneratedTrip(
+        token,
+        `${destination} trip`,
+        itineraryResult
+      );
+      setSavedTripId(savedTrip.id);
+      Alert.alert("Trip saved", "You can find it in your library.");
+    } catch (error) {
+      Alert.alert("Could not save trip", getErrorMessage(error));
+    } finally {
+      setIsSavingTrip(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <SafeAreaView style={s.root}>
@@ -228,6 +261,13 @@ export default function HomeScreen() {
             <Text style={s.greeting}>Welcome back,</Text>
             <Text style={s.userName}>{user?.name || "Traveler"}</Text>
           </View>
+          <TouchableOpacity
+            style={s.libraryButton}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate("Library")}
+          >
+            <Text style={s.libraryButtonText}>Library</Text>
+          </TouchableOpacity>
         </View>
 
         {/* ── User Info Card ── */}
@@ -279,9 +319,30 @@ export default function HomeScreen() {
         {/* ── AI Result ── */}
         {itineraryResult ? (
           <View style={s.resultCard}>
-            <Text style={s.cardTitle}>
-              AI Itinerary for {itineraryResult.destination || "your trip"}
-            </Text>
+            <View style={s.resultHeader}>
+              <Text style={[s.cardTitle, s.resultTitle]}>
+                AI Itinerary for {itineraryResult.destination || "your trip"}
+              </Text>
+              <TouchableOpacity
+                style={[
+                  s.saveTripButton,
+                  (isSavingTrip || !!savedTripId) && s.saveTripButtonDisabled,
+                ]}
+                activeOpacity={0.8}
+                disabled={isSavingTrip || !!savedTripId}
+                onPress={handleSaveGeneratedTrip}
+              >
+                <Text
+                  style={[
+                    s.saveTripButtonText,
+                    (isSavingTrip || !!savedTripId) &&
+                      s.saveTripButtonTextDisabled,
+                  ]}
+                >
+                  {savedTripId ? "Saved" : isSavingTrip ? "Saving..." : "Save"}
+                </Text>
+              </TouchableOpacity>
+            </View>
 
             {itineraryResult.days && itineraryResult.days.length > 0 ? (
               itineraryResult.days.map((day, index) => (
@@ -395,6 +456,22 @@ const s = StyleSheet.create({
   headerContent: {
     flex: 1,
   },
+  libraryButton: {
+    minWidth: 82,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.28)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  libraryButtonText: {
+    color: C.white,
+    fontSize: 13,
+    fontWeight: "800",
+  },
   greeting: {
     color: C.teal100,
     fontSize: 14,
@@ -454,6 +531,36 @@ const s = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     marginBottom: 16,
+  },
+  resultHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    marginBottom: 16,
+  },
+  resultTitle: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  saveTripButton: {
+    minWidth: 74,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: C.teal600,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  saveTripButtonDisabled: {
+    backgroundColor: C.slate200,
+  },
+  saveTripButtonText: {
+    color: C.white,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  saveTripButtonTextDisabled: {
+    color: C.slate500,
   },
   resultLoadingText: {
     color: C.slate700,

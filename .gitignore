@@ -29,9 +29,13 @@ Thumbs.db
 # Docker
 docker-compose.override.yml
 
-#VS Code
+# VS Code
 .vscode
 .vscode/*
 
-#Cursor
+# Cursor
 .cursorrules
+
+# Codex
+.codex
+.codex/*
