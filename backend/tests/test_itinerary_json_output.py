@@ -1,5 +1,6 @@
 import json
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -245,3 +246,56 @@ def test_generate_itinerary_endpoint_rejects_non_json_ollama_text(
 
     assert response.status_code == 422
     assert "non-JSON content" in response.json()["detail"]
+
+
+def test_generate_itinerary_endpoint_uses_offline_fallback_when_ollama_is_down(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    class FakeAsyncClient:
+        def __init__(self, timeout):
+            return None
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def post(self, url: str, json: dict):
+            request = httpx.Request("POST", url)
+            raise httpx.ConnectError("Ollama unavailable", request=request)
+
+    monkeypatch.setattr(architect_service.httpx, "AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr(architect_service, "ENABLE_OFFLINE_ITINERARY_FALLBACK", True)
+
+    response = client.post(
+        "/generate-itinerary",
+        json={
+            "destination": "Edinburgh",
+            "num_days": 2,
+            "start_date": "2026-09-17",
+            "end_date": "2026-09-19",
+            "travelers": 2,
+            "budget": 500,
+        },
+        headers={"Authorization": "Bearer fake-test-token"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["destination"] == "Edinburgh"
+    assert [day["day_number"] for day in data["days"]] == [1, 2]
+    assert all(len(day["activities"]) == 3 for day in data["days"])
+    itinerary_text = json.dumps(data)
+    assert "Budget context" not in itinerary_text
+    assert "Trip dates" not in itinerary_text
+    assert "per traveler" not in itinerary_text
+    assert any(
+        budget_phrase in itinerary_text
+        for budget_phrase in ["free", "low-cost", "moderate budget"]
+    )
+    assert any(
+        place in itinerary_text
+        for place in ["Royal Mile", "Grassmarket", "Arthur's Seat", "Water of Leith"]
+    )

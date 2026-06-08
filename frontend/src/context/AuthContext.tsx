@@ -1,11 +1,17 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { BASE_URL } from "../services/api";
+import {
+  BASE_URL,
+  changeMyPassword,
+  updateMyInterests,
+  updateMyProfile,
+} from "../services/api";
 
 export interface User {
   id: number;
   email: string;
   name: string;
+  interests: string[];
 }
 
 export interface AuthContextType {
@@ -15,6 +21,12 @@ export interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  updateUserProfile: (name: string, email: string) => Promise<void>;
+  updateUserInterests: (interests: string[]) => Promise<void>;
+  changeUserPassword: (
+    currentPassword: string,
+    newPassword: string
+  ) => Promise<void>;
   isAuthenticated: boolean;
 }
 
@@ -40,6 +52,28 @@ async function fetchWithTimeout(
   } finally {
     clearTimeout(timerId);
   }
+}
+
+type RawUserProfile = {
+  id: unknown;
+  email: unknown;
+  name: unknown;
+  interests?: unknown;
+};
+
+function normalizeUserProfile(profile: RawUserProfile): User {
+  const interests = Array.isArray(profile.interests)
+    ? profile.interests.filter(
+        (interest): interest is string => typeof interest === "string"
+      )
+    : [];
+
+  return {
+    id: Number(profile.id),
+    email: String(profile.email ?? ""),
+    name: String(profile.name ?? ""),
+    interests,
+  };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -68,12 +102,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const meData = await meResponse.json();
-        const restoredUser: User = {
-          id: meData.id as number,
-          email: meData.email as string,
-          name: meData.name as string,
-        };
+        const meData = (await meResponse.json()) as RawUserProfile;
+        const restoredUser = normalizeUserProfile(meData);
 
         setToken(savedToken);
         setUser(restoredUser);
@@ -105,12 +135,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!meResponse.ok) {
           throw new Error("Failed to fetch user profile after login");
         }
-        const meData = await meResponse.json();
-        const newUser: User = {
-          id: meData.id as number,
-          email: meData.email as string,
-          name: meData.name as string,
-        };
+        const meData = (await meResponse.json()) as RawUserProfile;
+        const newUser = normalizeUserProfile(meData);
 
         setToken(newToken);
         setUser(newUser);
@@ -179,6 +205,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const updateUserInterests = async (interests: string[]) => {
+    if (!token) {
+      throw new Error("Please log in again before updating your profile.");
+    }
+
+    const updatedProfile = await updateMyInterests(token, interests);
+    const updatedUser = normalizeUserProfile(updatedProfile);
+
+    setUser(updatedUser);
+    await AsyncStorage.setItem(USER_KEY, JSON.stringify(updatedUser));
+  };
+
+  const updateUserProfile = async (name: string, email: string) => {
+    if (!token) {
+      throw new Error("Please log in again before updating your profile.");
+    }
+
+    const updatedProfile = await updateMyProfile(token, name, email);
+    const updatedUser = normalizeUserProfile(updatedProfile);
+
+    setUser(updatedUser);
+    await AsyncStorage.setItem(USER_KEY, JSON.stringify(updatedUser));
+  };
+
+  const changeUserPassword = async (
+    currentPassword: string,
+    newPassword: string
+  ) => {
+    if (!token) {
+      throw new Error("Please log in again before changing your password.");
+    }
+
+    await changeMyPassword(token, currentPassword, newPassword);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -188,6 +249,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         register,
         logout,
+        updateUserProfile,
+        updateUserInterests,
+        changeUserPassword,
         isAuthenticated: !!token && !!user,
       }}
     >

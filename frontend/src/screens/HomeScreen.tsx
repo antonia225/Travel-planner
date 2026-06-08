@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   SafeAreaView,
@@ -11,7 +12,12 @@ import {
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
 import TripSearchForm from "../components/TripSearchForm";
-import { BASE_URL, saveGeneratedTrip } from "../services/api";
+import {
+  BASE_URL,
+  listInterestCategories,
+  saveGeneratedTrip,
+} from "../services/api";
+import { allRulesMet, checkPassword } from "../utils/validation";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
@@ -64,6 +70,11 @@ type BackendErrorResponse = {
   detail?: unknown;
 };
 
+type InterestCategoryOption = {
+  value: string;
+  description: string;
+};
+
 type Props = {
   navigation: {
     navigate: (screen: string) => void;
@@ -91,6 +102,13 @@ function getErrorMessage(error: unknown) {
   }
 
   return "Something went wrong.";
+}
+
+function formatInterestLabel(value: string) {
+  return value
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }
 
 function formatBackendDetail(detail: unknown) {
@@ -125,18 +143,187 @@ function formatBackendDetail(detail: unknown) {
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function HomeScreen({ navigation }: Props) {
-  const { user, token, logout, isLoading } = useAuth();
+  const {
+    user,
+    token,
+    logout,
+    isLoading,
+    changeUserPassword,
+    updateUserInterests,
+    updateUserProfile,
+  } = useAuth();
 
   const [isGeneratingTrip, setIsGeneratingTrip] = useState(false);
   const [isSavingTrip, setIsSavingTrip] = useState(false);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [isLoadingInterests, setIsLoadingInterests] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [savedTripId, setSavedTripId] = useState<number | null>(null);
+  const [profileName, setProfileName] = useState("");
+  const [profileEmail, setProfileEmail] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [interestOptions, setInterestOptions] = useState<
+    InterestCategoryOption[]
+  >([]);
+  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [itineraryResult, setItineraryResult] = useState<ItineraryResult | null>(
     null
   );
   const [tripError, setTripError] = useState<string | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isEditingProfile) {
+      setProfileName(user?.name ?? "");
+      setProfileEmail(user?.email ?? "");
+      setSelectedInterests(user?.interests ?? []);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    }
+  }, [isEditingProfile, user]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadInterestOptions = async () => {
+      try {
+        setIsLoadingInterests(true);
+        setProfileError(null);
+
+        const data = await listInterestCategories();
+        if (!isMounted) {
+          return;
+        }
+
+        setInterestOptions(
+          data.categories.map((category) => ({
+            value: category,
+            description:
+              data.descriptions[category] ?? formatInterestLabel(category),
+          }))
+        );
+      } catch (error) {
+        if (isMounted) {
+          setProfileError(getErrorMessage(error));
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingInterests(false);
+        }
+      }
+    };
+
+    loadInterestOptions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleLogout = async () => {
     await logout();
+  };
+
+  const handleEditProfile = () => {
+    setProfileName(user?.name ?? "");
+    setProfileEmail(user?.email ?? "");
+    setSelectedInterests(user?.interests ?? []);
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    if (interestOptions.length > 0) {
+      setProfileError(null);
+    }
+    setIsEditingProfile(true);
+  };
+
+  const handleCancelProfileEdit = () => {
+    setProfileName(user?.name ?? "");
+    setProfileEmail(user?.email ?? "");
+    setSelectedInterests(user?.interests ?? []);
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setProfileError(null);
+    setIsEditingProfile(false);
+  };
+
+  const toggleInterest = (interest: string) => {
+    setSelectedInterests((current) =>
+      current.includes(interest)
+        ? current.filter((item) => item !== interest)
+        : [...current, interest]
+    );
+  };
+
+  const handleSaveProfile = async () => {
+    const cleanedName = profileName.trim();
+    const cleanedEmail = profileEmail.trim();
+    const wantsPasswordChange =
+      currentPassword.length > 0 ||
+      newPassword.length > 0 ||
+      confirmPassword.length > 0;
+
+    if (!cleanedName) {
+      const message = "Name cannot be empty.";
+      setProfileError(message);
+      Alert.alert("Check profile details", message);
+      return;
+    }
+
+    if (!cleanedEmail || !cleanedEmail.includes("@")) {
+      const message = "Enter a valid email address.";
+      setProfileError(message);
+      Alert.alert("Check profile details", message);
+      return;
+    }
+
+    if (wantsPasswordChange) {
+      if (!currentPassword || !newPassword || !confirmPassword) {
+        const message = "Fill all password fields to change your password.";
+        setProfileError(message);
+        Alert.alert("Check password details", message);
+        return;
+      }
+
+      if (newPassword !== confirmPassword) {
+        const message = "New password and confirmation do not match.";
+        setProfileError(message);
+        Alert.alert("Check password details", message);
+        return;
+      }
+
+      if (!allRulesMet(checkPassword(newPassword))) {
+        const message =
+          "New password must have at least 8 characters, uppercase, lowercase, and a number.";
+        setProfileError(message);
+        Alert.alert("Check password details", message);
+        return;
+      }
+    }
+
+    try {
+      setIsSavingProfile(true);
+      setProfileError(null);
+      await updateUserProfile(cleanedName, cleanedEmail);
+      await updateUserInterests(selectedInterests);
+
+      if (wantsPasswordChange) {
+        await changeUserPassword(currentPassword, newPassword);
+      }
+
+      setIsEditingProfile(false);
+      Alert.alert("Profile updated", "Your account details were saved.");
+    } catch (error) {
+      const message = getErrorMessage(error);
+      setProfileError(message);
+      Alert.alert("Could not update profile", message);
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
 
   const handleTripSearch = async (tripData: TripSearchData) => {
@@ -162,10 +349,13 @@ export default function HomeScreen({ navigation }: Props) {
       setSavedTripId(null);
       setTripError(null);
 
-      console.log("BASE_URL:", BASE_URL);
       console.log("Sending trip data to backend:", {
         destination: tripData.destination,
         num_days: numDays,
+        start_date: tripData.startDate,
+        end_date: tripData.endDate,
+        travelers: tripData.travelers,
+        budget: tripData.budget,
       });
 
       const response = await fetch(`${BASE_URL}/generate-itinerary`, {
@@ -177,6 +367,10 @@ export default function HomeScreen({ navigation }: Props) {
         body: JSON.stringify({
           destination: tripData.destination,
           num_days: numDays,
+          start_date: tripData.startDate,
+          end_date: tripData.endDate,
+          travelers: tripData.travelers,
+          budget: tripData.budget,
         }),
       });
 
@@ -272,25 +466,215 @@ export default function HomeScreen({ navigation }: Props) {
 
         {/* ── User Info Card ── */}
         <View style={s.card}>
-          <Text style={s.cardTitle}>Account Details</Text>
-
-          <View style={s.infoRow}>
-            <Text style={s.infoLabel}>Name</Text>
-            <Text style={s.infoValue}>{user?.name}</Text>
+          <View style={s.cardHeader}>
+            <Text style={[s.cardTitle, s.cardTitleInline]}>
+              Account Details
+            </Text>
+            {isEditingProfile ? (
+              <TouchableOpacity
+                style={s.editProfileButton}
+                activeOpacity={0.8}
+                onPress={handleCancelProfileEdit}
+              >
+                <Text style={s.editProfileButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={s.editProfileButton}
+                activeOpacity={0.8}
+                onPress={handleEditProfile}
+              >
+                <Text style={s.editProfileButtonText}>Edit Profile</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
-          <View style={s.divider} />
+          {isEditingProfile ? (
+            <View style={s.profileForm}>
+              <View style={s.profileField}>
+                <Text style={s.infoLabel}>Name</Text>
+                <TextInput
+                  style={s.profileInput}
+                  value={profileName}
+                  onChangeText={setProfileName}
+                  placeholder="Your name"
+                  placeholderTextColor={C.slate400}
+                  autoCapitalize="words"
+                />
+              </View>
 
-          <View style={s.infoRow}>
-            <Text style={s.infoLabel}>Email</Text>
-            <Text style={s.infoValue}>{user?.email}</Text>
-          </View>
+              <View style={s.profileField}>
+                <Text style={s.infoLabel}>Email</Text>
+                <TextInput
+                  style={s.profileInput}
+                  value={profileEmail}
+                  onChangeText={setProfileEmail}
+                  placeholder="you@example.com"
+                  placeholderTextColor={C.slate400}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+
+              <View style={s.passwordSection}>
+                <Text style={s.infoLabel}>Change Password</Text>
+                <Text style={s.passwordHint}>
+                  Leave these fields empty to keep your current password.
+                </Text>
+
+                <TextInput
+                  style={s.profileInput}
+                  value={currentPassword}
+                  onChangeText={setCurrentPassword}
+                  placeholder="Current password"
+                  placeholderTextColor={C.slate400}
+                  secureTextEntry
+                  autoCapitalize="none"
+                />
+
+                <TextInput
+                  style={s.profileInput}
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  placeholder="New password"
+                  placeholderTextColor={C.slate400}
+                  secureTextEntry
+                  autoCapitalize="none"
+                />
+
+                <TextInput
+                  style={s.profileInput}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  placeholder="Confirm new password"
+                  placeholderTextColor={C.slate400}
+                  secureTextEntry
+                  autoCapitalize="none"
+                />
+              </View>
+            </View>
+          ) : (
+            <>
+              <View style={s.infoRow}>
+                <Text style={s.infoLabel}>Name</Text>
+                <Text style={s.infoValue}>{user?.name}</Text>
+              </View>
+
+              <View style={s.divider} />
+
+              <View style={s.infoRow}>
+                <Text style={s.infoLabel}>Email</Text>
+                <Text style={s.infoValue}>{user?.email}</Text>
+              </View>
+            </>
+          )}
 
           <View style={s.divider} />
 
           <View style={s.infoRow}>
             <Text style={s.infoLabel}>User ID</Text>
             <Text style={[s.infoValue, s.infoValueMuted]}>{user?.id}</Text>
+          </View>
+
+          <View style={s.divider} />
+
+          <View style={s.profileSection}>
+            <View style={s.profileSectionHeader}>
+              <Text style={s.infoLabel}>Travel Interests</Text>
+              {isLoadingInterests ? (
+                <ActivityIndicator size="small" color={C.teal600} />
+              ) : null}
+            </View>
+
+            {profileError ? (
+              <Text style={s.profileErrorText}>{profileError}</Text>
+            ) : null}
+
+            {isEditingProfile ? (
+              <>
+                <View style={s.interestsGrid}>
+                  {interestOptions.length > 0 ? (
+                    interestOptions.map((interest) => {
+                      const isSelected = selectedInterests.includes(
+                        interest.value
+                      );
+
+                      return (
+                        <TouchableOpacity
+                          key={interest.value}
+                          style={[
+                            s.interestChip,
+                            isSelected ? s.interestChipSelected : null,
+                          ]}
+                          accessibilityLabel={interest.description}
+                          activeOpacity={0.8}
+                          disabled={isSavingProfile}
+                          onPress={() => toggleInterest(interest.value)}
+                        >
+                          <Text
+                            style={[
+                              s.interestChipText,
+                              isSelected ? s.interestChipTextSelected : null,
+                            ]}
+                          >
+                            {formatInterestLabel(interest.value)}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })
+                  ) : (
+                    <Text style={s.emptyInterestsText}>
+                      No interest categories available.
+                    </Text>
+                  )}
+                </View>
+
+                <View style={s.profileActions}>
+                  <TouchableOpacity
+                    style={s.profileSecondaryButton}
+                    activeOpacity={0.8}
+                    disabled={isSavingProfile}
+                    onPress={handleCancelProfileEdit}
+                  >
+                    <Text style={s.profileSecondaryButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      s.profileSaveButton,
+                      isSavingProfile ? s.profileButtonDisabled : null,
+                    ]}
+                    activeOpacity={0.8}
+                    disabled={isSavingProfile}
+                    onPress={handleSaveProfile}
+                  >
+                    <Text style={s.profileSaveButtonText}>
+                      {isSavingProfile ? "Saving..." : "Save"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <View style={s.interestsGrid}>
+                {user?.interests.length ? (
+                  user.interests.map((interest) => (
+                    <View
+                      key={interest}
+                      style={[s.interestChip, s.interestChipSelected]}
+                    >
+                      <Text style={s.interestChipTextSelected}>
+                        {formatInterestLabel(interest)}
+                      </Text>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={s.emptyInterestsText}>
+                    No interests selected.
+                  </Text>
+                )}
+              </View>
+            )}
           </View>
         </View>
 
@@ -312,7 +696,6 @@ export default function HomeScreen({ navigation }: Props) {
           <View style={s.errorCard}>
             <Text style={s.errorTitle}>Trip generation failed</Text>
             <Text style={s.errorMessage}>{tripError}</Text>
-            <Text style={s.errorMessage}>BASE_URL: {BASE_URL}</Text>
           </View>
         ) : null}
 
@@ -497,6 +880,32 @@ const s = StyleSheet.create({
     fontWeight: "700",
     marginBottom: 16,
   },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  cardTitleInline: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  editProfileButton: {
+    minWidth: 104,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: C.teal50,
+    borderWidth: 1,
+    borderColor: C.teal200,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  editProfileButtonText: {
+    color: C.teal700,
+    fontSize: 13,
+    fontWeight: "800",
+  },
   infoRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -523,6 +932,123 @@ const s = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: C.slate200,
+  },
+  profileForm: {
+    gap: 14,
+    paddingBottom: 16,
+  },
+  profileField: {
+    gap: 8,
+  },
+  profileInput: {
+    width: "100%",
+    minHeight: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: C.slate200,
+    backgroundColor: C.white,
+    color: C.slate900,
+    fontSize: 15,
+    fontWeight: "600",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  passwordSection: {
+    gap: 8,
+    borderRadius: 14,
+    backgroundColor: C.white,
+    borderWidth: 1,
+    borderColor: C.slate200,
+    padding: 14,
+  },
+  passwordHint: {
+    color: C.slate500,
+    fontSize: 12,
+    fontWeight: "600",
+    lineHeight: 18,
+  },
+  profileSection: {
+    paddingTop: 16,
+  },
+  profileSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  profileErrorText: {
+    color: C.red500,
+    fontSize: 12,
+    fontWeight: "600",
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  interestsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  interestChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: C.slate200,
+    backgroundColor: C.white,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  interestChipSelected: {
+    borderColor: C.teal600,
+    backgroundColor: C.teal50,
+  },
+  interestChipText: {
+    color: C.slate700,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  interestChipTextSelected: {
+    color: C.teal700,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  emptyInterestsText: {
+    color: C.slate500,
+    fontSize: 13,
+    fontWeight: "600",
+    lineHeight: 19,
+  },
+  profileActions: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 16,
+  },
+  profileSecondaryButton: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: C.slate100,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  profileSecondaryButtonText: {
+    color: C.slate500,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  profileSaveButton: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: C.teal600,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  profileButtonDisabled: {
+    backgroundColor: C.slate200,
+  },
+  profileSaveButtonText: {
+    color: C.white,
+    fontSize: 13,
+    fontWeight: "800",
   },
 
   // Result Card

@@ -41,6 +41,18 @@ export type SavedTrip = {
   updated_at: string;
 };
 
+export type UserProfile = {
+  id: number;
+  email: string;
+  name: string;
+  interests: string[];
+};
+
+export type InterestCategoriesResponse = {
+  categories: string[];
+  descriptions: Record<string, string>;
+};
+
 type BackendErrorResponse = {
   detail?: unknown;
 };
@@ -139,5 +151,53 @@ export function renameSavedTrip(token: string, tripId: number, name: string) {
 export function deleteSavedTrip(token: string, tripId: number) {
   return request<void>(`/saved-trips/${tripId}`, token, {
     method: "DELETE",
+  });
+}
+
+export async function listInterestCategories() {
+  const response = await fetch(`${BASE_URL}/interests/categories`);
+  const result = (await response.json().catch(() => null)) as
+    | InterestCategoriesResponse
+    | BackendErrorResponse
+    | null;
+
+  if (!response.ok) {
+    const message =
+      result &&
+      typeof result === "object" &&
+      "detail" in result
+        ? formatBackendDetail(result.detail)
+        : null;
+    throw new Error(message || `Backend error: ${response.status}`);
+  }
+
+  return result as InterestCategoriesResponse;
+}
+
+export function updateMyInterests(token: string, interests: string[]) {
+  return request<UserProfile>("/me/interests", token, {
+    method: "PUT",
+    body: JSON.stringify({ interests }),
+  });
+}
+
+export function updateMyProfile(token: string, name: string, email: string) {
+  return request<UserProfile>("/me", token, {
+    method: "PATCH",
+    body: JSON.stringify({ name, email }),
+  });
+}
+
+export function changeMyPassword(
+  token: string,
+  currentPassword: string,
+  newPassword: string
+) {
+  return request<void>("/me/password", token, {
+    method: "PUT",
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
   });
 }

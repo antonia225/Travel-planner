@@ -21,6 +21,16 @@ _VALID_PAYLOAD = {
 }
 
 
+def _auth_headers(client: TestClient, payload: dict[str, str] | None = None) -> dict[str, str]:
+    user_payload = payload or _VALID_PAYLOAD
+    client.post("/register", json=user_payload)
+    login_response = client.post(
+        "/login",
+        json={"email": user_payload["email"], "password": user_payload["password"]},
+    )
+    return {"Authorization": f"Bearer {login_response.json()['access_token']}"}
+
+
 # ---------------------------------------------------------------------------
 # Test cases
 # ---------------------------------------------------------------------------
@@ -167,7 +177,92 @@ class TestInterests:
         assert len(body["categories"]) > 0
 
 
-_ITINERARY_PAYLOAD = {"destination": "Paris", "num_days": 2}
+class TestProfileUpdate:
+    def test_update_profile_name_and_email_succeeds(self, client: TestClient):
+        headers = _auth_headers(client)
+
+        response = client.patch(
+            "/me",
+            json={"name": "Jane Traveler", "email": "jane.traveler@example.com"},
+            headers=headers,
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["name"] == "Jane Traveler"
+        assert body["email"] == "jane.traveler@example.com"
+        assert body["interests"] == []
+
+    def test_update_profile_duplicate_email_returns_409(self, client: TestClient):
+        headers = _auth_headers(client)
+        client.post(
+            "/register",
+            json={
+                "name": "Alex Doe",
+                "email": "alex@example.com",
+                "password": "Secure1Password",
+            },
+        )
+
+        response = client.patch(
+            "/me",
+            json={"name": "Jane Doe", "email": "alex@example.com"},
+            headers=headers,
+        )
+
+        assert response.status_code == 409
+        assert "already exists" in response.json()["detail"].lower()
+
+    def test_change_password_requires_current_password(self, client: TestClient):
+        headers = _auth_headers(client)
+
+        response = client.put(
+            "/me/password",
+            json={
+                "current_password": "WrongPassword1",
+                "new_password": "NewSecure1Password",
+            },
+            headers=headers,
+        )
+
+        assert response.status_code == 401
+        assert "current password" in response.json()["detail"].lower()
+
+    def test_change_password_succeeds_and_new_password_can_login(self, client: TestClient):
+        headers = _auth_headers(client)
+
+        response = client.put(
+            "/me/password",
+            json={
+                "current_password": _VALID_PAYLOAD["password"],
+                "new_password": "NewSecure1Password",
+            },
+            headers=headers,
+        )
+
+        assert response.status_code == 204
+
+        old_login = client.post(
+            "/login",
+            json={"email": _VALID_PAYLOAD["email"], "password": _VALID_PAYLOAD["password"]},
+        )
+        new_login = client.post(
+            "/login",
+            json={"email": _VALID_PAYLOAD["email"], "password": "NewSecure1Password"},
+        )
+
+        assert old_login.status_code == 401
+        assert new_login.status_code == 200
+
+
+_ITINERARY_PAYLOAD = {
+    "destination": "Paris",
+    "num_days": 2,
+    "start_date": "2026-09-17",
+    "end_date": "2026-09-19",
+    "travelers": 2,
+    "budget": 500,
+}
 
 _MOCK_ITINERARY = ItineraryResponse(
     destination="Paris",
@@ -230,4 +325,8 @@ class TestGenerateItinerary:
         _call_kwargs = mock_generate.call_args.kwargs
         assert _call_kwargs["destination"] == "Paris"
         assert _call_kwargs["days"] == 2
+        assert _call_kwargs["start_date"].isoformat() == "2026-09-17"
+        assert _call_kwargs["end_date"].isoformat() == "2026-09-19"
+        assert _call_kwargs["travelers"] == 2
+        assert _call_kwargs["budget"] == 500
         assert set(_call_kwargs["user_interests"]) == {"adventure", "food_culinary"}
