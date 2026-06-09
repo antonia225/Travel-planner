@@ -1,3 +1,5 @@
+import Constants from "expo-constants";
+
 // ─── API Configuration ───────────────────────────────────────────────────────
 // Physical-device testing: replace YOUR_WIFI_IP with your computer's local IP.
 //   Windows → run `ipconfig`  and look for "IPv4 Address" (e.g. 192.168.1.42)
@@ -5,11 +7,17 @@
 //
 // Example: http://192.168.1.42:8000
 //
-// Set EXPO_PUBLIC_API_URL in a .env.local file at the frontend root when
-// testing on a physical device. The emulator/default fallback is localhost.
+// By default we auto-detect your Expo dev host IP and use port 8000.
+// Alternatively, set the EXPO_PUBLIC_API_URL environment variable in a
+// .env.local file at the frontend root and it will take precedence.
 // ─────────────────────────────────────────────────────────────────────────────
-export const BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
+const host = Constants.expoConfig?.hostUri?.split(":")[0];
+const API_PORT = 8000;
+const autoDetectedBaseUrl = host
+  ? `http://${host}:${API_PORT}`
+  : `http://localhost:${API_PORT}`;
+
+export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? autoDetectedBaseUrl;
 
 const REQUEST_TIMEOUT_MS = 30_000;
 const AI_REQUEST_TIMEOUT_MS = 10 * 60_000;
@@ -28,6 +36,19 @@ export type DailySchedule = {
 export type ItineraryResponse = {
   destination: string;
   days: DailySchedule[];
+};
+
+export type GeneratedTripData = {
+  destination?: string;
+  days?: {
+    day_number?: number;
+    activities?: {
+      title?: string;
+      description?: string;
+      time_slot?: string;
+    }[];
+  }[];
+  [key: string]: unknown;
 };
 
 export type BudgetRecommendation = {
@@ -74,7 +95,7 @@ export type SavedTrip = {
   id: number;
   user_id: number;
   name: string;
-  trip_data: ItineraryResponse;
+  trip_data: GeneratedTripData;
   created_at: string;
   updated_at: string;
 };
@@ -214,6 +235,10 @@ export function getInterestCategories(): Promise<InterestCategoriesResponse> {
   return fetchJson<InterestCategoriesResponse>("/interests/categories");
 }
 
+export function listInterestCategories(): Promise<InterestCategoriesResponse> {
+  return getInterestCategories();
+}
+
 export function generateItinerary(
   token: string,
   destination: string,
@@ -261,7 +286,7 @@ export function saveTrip(payload: {
 export function saveGeneratedTrip(
   token: string,
   name: string,
-  tripData: ItineraryResponse
+  tripData: GeneratedTripData
 ): Promise<SavedTrip> {
   return fetchJson<SavedTrip>(
     "/saved-trips",

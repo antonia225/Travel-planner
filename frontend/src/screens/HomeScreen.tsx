@@ -1,37 +1,33 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
   SafeAreaView,
+  ActivityIndicator,
+  Alert,
+  ScrollView,
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
+import TripSearchForm from "../components/TripSearchForm";
 import {
-  BudgetOptimizerResponse,
-  getInterestCategories,
-  getMe,
-  getSavedTrip,
-  generateItinerary,
-  ItineraryResponse,
-  listSavedTrips,
-  optimizeBudget,
-  saveTrip,
-  TripDetailsResponse,
-  TripListResponse,
-  updateMyInterests,
+  BASE_URL,
+  listInterestCategories,
+  saveGeneratedTrip,
 } from "../services/api";
+import { allRulesMet, checkPassword } from "../utils/validation";
+
+// ─── Design tokens ────────────────────────────────────────────────────────────
 
 const C = {
   teal700: "#0f766e",
   teal600: "#0d9488",
+  teal200: "#99f6e4",
   teal100: "#ccfbf1",
   teal50: "#f0fdfa",
   slate900: "#0f172a",
-  slate700: "#334155",
   slate500: "#64748b",
   slate400: "#94a3b8",
   slate200: "#e2e8f0",
@@ -39,190 +35,221 @@ const C = {
   slate50: "#f8fafc",
   white: "#ffffff",
   red500: "#ef4444",
-  red50: "#fef2f2",
+  red100: "#fee2e2",
+  red900: "#7f1d1d",
+  red800: "#991b1b",
+  slate700: "#334155",
 };
 
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <View style={s.card}>
-      <Text style={s.cardTitle}>{title}</Text>
-      {children}
-    </View>
-  );
-}
+type TripSearchData = {
+  destination: string;
+  startDate: string;
+  endDate: string;
+  travelers: number;
+  budget: number;
+};
 
-function Field({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  keyboardType = "default",
-  multiline = false,
-}: {
-  label: string;
+type ItineraryActivity = {
+  title?: string;
+  description?: string;
+  time_slot?: string;
+};
+
+type ItineraryDay = {
+  day_number?: number;
+  activities?: ItineraryActivity[];
+};
+
+type ItineraryResult = {
+  destination?: string;
+  days?: ItineraryDay[];
+  [key: string]: unknown;
+};
+
+type BackendErrorResponse = {
+  detail?: unknown;
+};
+
+type InterestCategoryOption = {
   value: string;
-  onChangeText: (value: string) => void;
-  placeholder: string;
-  keyboardType?: "default" | "numeric";
-  multiline?: boolean;
-}) {
-  return (
-    <View style={s.field}>
-      <Text style={s.label}>{label}</Text>
-      <TextInput
-        style={[s.input, multiline && s.textArea]}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={C.slate400}
-        keyboardType={keyboardType}
-        multiline={multiline}
-      />
-    </View>
-  );
+  description: string;
+};
+
+type Props = {
+  navigation: {
+    navigate: (screen: string) => void;
+  };
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function parseLocalDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day);
 }
 
-function ActionButton({
-  title,
-  onPress,
-  loading = false,
-  disabled = false,
-  tone = "primary",
-}: {
-  title: string;
-  onPress: () => void;
-  loading?: boolean;
-  disabled?: boolean;
-  tone?: "primary" | "secondary" | "danger";
-}) {
-  const isDisabled = disabled || loading;
-  const buttonStyle = [
-    s.button,
-    tone === "danger" ? s.buttonDanger : null,
-    tone === "secondary" ? s.buttonSecondary : null,
-    isDisabled ? s.buttonDisabled : null,
-  ];
+function countTripDays(startDate: string, endDate: string) {
+  const start = parseLocalDate(startDate);
+  const end = parseLocalDate(endDate);
 
-  return (
-    <TouchableOpacity
-      style={buttonStyle}
-      onPress={onPress}
-      disabled={isDisabled}
-      activeOpacity={0.8}
-    >
-      {loading ? (
-        <ActivityIndicator color={tone === "secondary" ? C.teal600 : C.white} />
-      ) : (
-        <Text
-          style={[
-            s.buttonText,
-            tone === "secondary" ? s.buttonTextSecondary : null,
-            isDisabled ? s.buttonTextDisabled : null,
-          ]}
-        >
-          {title}
-        </Text>
-      )}
-    </TouchableOpacity>
-  );
+  const diffMs = end.getTime() - start.getTime();
+  return Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
 }
 
-function formatInterest(value: string) {
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "Something went wrong.";
+}
+
+function formatInterestLabel(value: string) {
   return value
     .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
 }
 
-function tripDays(trip: TripListResponse) {
-  return trip.numberOfDays ?? trip.duration_days ?? 0;
+function formatBackendDetail(detail: unknown) {
+  if (typeof detail === "string") {
+    return detail;
+  }
+
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (
+          item &&
+          typeof item === "object" &&
+          "msg" in item &&
+          typeof item.msg === "string"
+        ) {
+          return item.msg;
+        }
+
+        return JSON.stringify(item);
+      })
+      .join("; ");
+  }
+
+  if (detail) {
+    return JSON.stringify(detail);
+  }
+
+  return null;
 }
 
-export default function HomeScreen() {
-  const { user, token, logout, isLoading } = useAuth();
+// ─── Screen ───────────────────────────────────────────────────────────────────
 
-  const [categories, setCategories] = useState<string[]>([]);
-  const [descriptions, setDescriptions] = useState<Record<string, string>>({});
-  const [selectedInterests, setSelectedInterests] = useState<string[]>(
-    user?.interests ?? []
-  );
-  const [interestLoading, setInterestLoading] = useState(false);
+export default function HomeScreen({ navigation }: Props) {
+  const {
+    user,
+    token,
+    logout,
+    isLoading,
+    changeUserPassword,
+    updateUserInterests,
+    updateUserProfile,
+  } = useAuth();
 
-  const [destination, setDestination] = useState("");
-  const [numDays, setNumDays] = useState("3");
-  const [itinerary, setItinerary] = useState<ItineraryResponse | null>(null);
-  const [itineraryLoading, setItineraryLoading] = useState(false);
-
-  const [budgetDestination, setBudgetDestination] = useState("");
-  const [budget, setBudget] = useState("800");
-  const [budgetPlan, setBudgetPlan] =
-    useState<BudgetOptimizerResponse | null>(null);
-  const [budgetLoading, setBudgetLoading] = useState(false);
-
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [summary, setSummary] = useState("");
-  const [saveLoading, setSaveLoading] = useState(false);
-
-  const [trips, setTrips] = useState<TripListResponse[]>([]);
-  const [selectedTrip, setSelectedTrip] = useState<TripDetailsResponse | null>(
+  const [isGeneratingTrip, setIsGeneratingTrip] = useState(false);
+  const [isSavingTrip, setIsSavingTrip] = useState(false);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [isLoadingInterests, setIsLoadingInterests] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [savedTripId, setSavedTripId] = useState<number | null>(null);
+  const [profileName, setProfileName] = useState("");
+  const [profileEmail, setProfileEmail] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [interestOptions, setInterestOptions] = useState<
+    InterestCategoryOption[]
+  >([]);
+  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+  const [itineraryResult, setItineraryResult] = useState<ItineraryResult | null>(
     null
   );
-  const [tripsLoading, setTripsLoading] = useState(false);
-
-  const [message, setMessage] = useState("");
-  const [errorMessage, setErrorMessage] = useState("");
-
-  const selectedInterestSet = useMemo(
-    () => new Set(selectedInterests),
-    [selectedInterests]
-  );
-
-  const refreshTrips = useCallback(async () => {
-    setTripsLoading(true);
-    try {
-      const savedTrips = await listSavedTrips();
-      setTrips(savedTrips);
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Could not load saved trips."
-      );
-    } finally {
-      setTripsLoading(false);
-    }
-  }, []);
+  const [tripError, setTripError] = useState<string | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadInitialData() {
-      try {
-        const [categoryResponse, savedTrips] = await Promise.all([
-          getInterestCategories(),
-          listSavedTrips(),
-        ]);
-
-        setCategories(categoryResponse.categories);
-        setDescriptions(categoryResponse.descriptions);
-        setTrips(savedTrips);
-
-        if (token) {
-          const profile = await getMe(token);
-          setSelectedInterests(profile.interests ?? []);
-        }
-      } catch (error) {
-        setErrorMessage(
-          error instanceof Error ? error.message : "Could not load planner data."
-        );
-      }
+    if (!isEditingProfile) {
+      setProfileName(user?.name ?? "");
+      setProfileEmail(user?.email ?? "");
+      setSelectedInterests(user?.interests ?? []);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
     }
+  }, [isEditingProfile, user]);
 
-    void loadInitialData();
-  }, [token]);
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadInterestOptions = async () => {
+      try {
+        setIsLoadingInterests(true);
+        setProfileError(null);
+
+        const data = await listInterestCategories();
+        if (!isMounted) {
+          return;
+        }
+
+        setInterestOptions(
+          data.categories.map((category) => ({
+            value: category,
+            description:
+              data.descriptions[category] ?? formatInterestLabel(category),
+          }))
+        );
+      } catch (error) {
+        if (isMounted) {
+          setProfileError(getErrorMessage(error));
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingInterests(false);
+        }
+      }
+    };
+
+    loadInterestOptions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleLogout = async () => {
+    await logout();
+  };
+
+  const handleEditProfile = () => {
+    setProfileName(user?.name ?? "");
+    setProfileEmail(user?.email ?? "");
+    setSelectedInterests(user?.interests ?? []);
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    if (interestOptions.length > 0) {
+      setProfileError(null);
+    }
+    setIsEditingProfile(true);
+  };
+
+  const handleCancelProfileEdit = () => {
+    setProfileName(user?.name ?? "");
+    setProfileEmail(user?.email ?? "");
+    setSelectedInterests(user?.interests ?? []);
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setProfileError(null);
+    setIsEditingProfile(false);
+  };
 
   const toggleInterest = (interest: string) => {
     setSelectedInterests((current) =>
@@ -232,125 +259,176 @@ export default function HomeScreen() {
     );
   };
 
-  const handleSaveInterests = async () => {
-    if (!token) return;
+  const handleSaveProfile = async () => {
+    const cleanedName = profileName.trim();
+    const cleanedEmail = profileEmail.trim();
+    const wantsPasswordChange =
+      currentPassword.length > 0 ||
+      newPassword.length > 0 ||
+      confirmPassword.length > 0;
 
-    setMessage("");
-    setErrorMessage("");
-    setInterestLoading(true);
+    if (!cleanedName) {
+      const message = "Name cannot be empty.";
+      setProfileError(message);
+      Alert.alert("Check profile details", message);
+      return;
+    }
+
+    if (!cleanedEmail || !cleanedEmail.includes("@")) {
+      const message = "Enter a valid email address.";
+      setProfileError(message);
+      Alert.alert("Check profile details", message);
+      return;
+    }
+
+    if (wantsPasswordChange) {
+      if (!currentPassword || !newPassword || !confirmPassword) {
+        const message = "Fill all password fields to change your password.";
+        setProfileError(message);
+        Alert.alert("Check password details", message);
+        return;
+      }
+
+      if (newPassword !== confirmPassword) {
+        const message = "New password and confirmation do not match.";
+        setProfileError(message);
+        Alert.alert("Check password details", message);
+        return;
+      }
+
+      if (!allRulesMet(checkPassword(newPassword))) {
+        const message =
+          "New password must have at least 8 characters, uppercase, lowercase, and a number.";
+        setProfileError(message);
+        Alert.alert("Check password details", message);
+        return;
+      }
+    }
+
     try {
-      const profile = await updateMyInterests(token, selectedInterests);
-      setSelectedInterests(profile.interests ?? []);
-      setMessage("Travel interests saved.");
+      setIsSavingProfile(true);
+      setProfileError(null);
+      await updateUserProfile(cleanedName, cleanedEmail);
+      await updateUserInterests(selectedInterests);
+
+      if (wantsPasswordChange) {
+        await changeUserPassword(currentPassword, newPassword);
+      }
+
+      setIsEditingProfile(false);
+      Alert.alert("Profile updated", "Your account details were saved.");
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Could not save interests."
-      );
+      const message = getErrorMessage(error);
+      setProfileError(message);
+      Alert.alert("Could not update profile", message);
     } finally {
-      setInterestLoading(false);
+      setIsSavingProfile(false);
     }
   };
 
-  const handleGenerateItinerary = async () => {
-    if (!token) return;
-
-    const days = Number.parseInt(numDays, 10);
-    if (!destination.trim() || Number.isNaN(days) || days < 1) {
-      setErrorMessage("Enter a destination and a valid number of days.");
+  const handleTripSearch = async (tripData: TripSearchData) => {
+    if (!token) {
+      const message = "Please log in again before generating a trip.";
+      setTripError(message);
+      Alert.alert("Not logged in", message);
       return;
     }
 
-    setMessage("");
-    setErrorMessage("");
-    setItineraryLoading(true);
+    const numDays = countTripDays(tripData.startDate, tripData.endDate);
+
+    if (numDays < 1) {
+      const message = "End date must be after start date.";
+      setTripError(message);
+      Alert.alert("Invalid dates", message);
+      return;
+    }
+
     try {
-      const result = await generateItinerary(token, destination.trim(), days);
-      setItinerary(result);
-      setSummary(
-        `${result.days.length}-day trip to ${result.destination} with ${result.days[0]?.activities[0]?.title ?? "custom activities"}.`
-      );
-      setMessage("Itinerary generated.");
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Could not generate itinerary."
-      );
-    } finally {
-      setItineraryLoading(false);
-    }
-  };
+      setIsGeneratingTrip(true);
+      setItineraryResult(null);
+      setSavedTripId(null);
+      setTripError(null);
 
-  const handleOptimizeBudget = async () => {
-    const parsedBudget = Number.parseInt(budget, 10);
-    const targetDestination = budgetDestination.trim() || destination.trim();
-
-    if (!targetDestination || Number.isNaN(parsedBudget) || parsedBudget < 1) {
-      setErrorMessage("Enter a destination and a valid budget.");
-      return;
-    }
-
-    setMessage("");
-    setErrorMessage("");
-    setBudgetLoading(true);
-    try {
-      const result = await optimizeBudget(targetDestination, parsedBudget);
-      setBudgetPlan(result);
-      setMessage("Budget plan generated.");
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Could not optimize budget."
-      );
-    } finally {
-      setBudgetLoading(false);
-    }
-  };
-
-  const handleSaveTrip = async () => {
-    if (!itinerary) {
-      setErrorMessage("Generate an itinerary before saving a trip.");
-      return;
-    }
-
-    if (!startDate || !endDate || !summary.trim()) {
-      setErrorMessage("Enter start date, end date, and a short summary.");
-      return;
-    }
-
-    setMessage("");
-    setErrorMessage("");
-    setSaveLoading(true);
-    try {
-      const trip = await saveTrip({
-        destination: itinerary.destination,
-        startDate,
-        endDate,
-        summary: summary.trim(),
-        itinerary,
+      console.log("Sending trip data to backend:", {
+        destination: tripData.destination,
+        num_days: numDays,
+        start_date: tripData.startDate,
+        end_date: tripData.endDate,
+        travelers: tripData.travelers,
+        budget: tripData.budget,
       });
-      setSelectedTrip(trip);
-      setMessage("Trip saved.");
-      await refreshTrips();
+
+      const response = await fetch(`${BASE_URL}/generate-itinerary`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          destination: tripData.destination,
+          num_days: numDays,
+          start_date: tripData.startDate,
+          end_date: tripData.endDate,
+          travelers: tripData.travelers,
+          budget: tripData.budget,
+        }),
+      });
+
+      const result = (await response.json().catch(() => null)) as
+        | ItineraryResult
+        | BackendErrorResponse
+        | null;
+
+      if (!response.ok) {
+        const backendMessage =
+          result && "detail" in result
+            ? formatBackendDetail(result.detail)
+            : null;
+
+        const message =
+          backendMessage ||
+          `Backend error: ${response.status} ${response.statusText}`;
+
+        console.log("Backend error:", result);
+        setTripError(message);
+        Alert.alert("Could not generate itinerary", message);
+        return;
+      }
+
+      console.log("AI itinerary result:", result);
+      setItineraryResult(result as ItineraryResult);
+      Alert.alert("Success", "AI itinerary generated.");
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Could not save trip."
-      );
+      const message = getErrorMessage(error);
+      console.log("Trip search failed:", error);
+      setTripError(message);
+      Alert.alert("Could not connect to backend", message);
     } finally {
-      setSaveLoading(false);
+      setIsGeneratingTrip(false);
     }
   };
 
-  const handleSelectTrip = async (tripId: number) => {
-    setMessage("");
-    setErrorMessage("");
-    setTripsLoading(true);
+  const handleSaveGeneratedTrip = async () => {
+    if (!token || !itineraryResult) {
+      Alert.alert("Nothing to save", "Generate a trip before saving it.");
+      return;
+    }
+
+    const destination = itineraryResult.destination || "Generated trip";
+
     try {
-      const trip = await getSavedTrip(tripId);
-      setSelectedTrip(trip);
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Could not load trip details."
+      setIsSavingTrip(true);
+      const savedTrip = await saveGeneratedTrip(
+        token,
+        `${destination} trip`,
+        itineraryResult
       );
+      setSavedTripId(savedTrip.id);
+      Alert.alert("Trip saved", "You can find it in your library.");
+    } catch (error) {
+      Alert.alert("Could not save trip", getErrorMessage(error));
     } finally {
-      setTripsLoading(false);
+      setIsSavingTrip(false);
     }
   };
 
@@ -367,254 +445,367 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={s.root}>
-      <ScrollView
-        contentContainerStyle={s.container}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
+      <ScrollView contentContainerStyle={s.scrollContent}>
+        {/* ── Header ── */}
         <View style={s.header}>
           <View style={s.iconBadge}>
-            <Text style={s.iconText}>✈️</Text>
+            <Text style={{ fontSize: 36 }}>✈️</Text>
           </View>
           <View style={s.headerContent}>
             <Text style={s.greeting}>Welcome back,</Text>
             <Text style={s.userName}>{user?.name || "Traveler"}</Text>
-            <Text style={s.userEmail}>{user?.email}</Text>
           </View>
-          <TouchableOpacity style={s.signOutButton} onPress={logout}>
-            <Text style={s.signOutText}>Sign Out</Text>
+          <TouchableOpacity
+            style={s.libraryButton}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate("Library")}
+          >
+            <Text style={s.libraryButtonText}>Library</Text>
           </TouchableOpacity>
         </View>
 
-        {errorMessage ? (
-          <View style={[s.banner, s.errorBanner]}>
-            <Text style={s.errorText}>{errorMessage}</Text>
+        {/* ── User Info Card ── */}
+        <View style={s.card}>
+          <View style={s.cardHeader}>
+            <Text style={[s.cardTitle, s.cardTitleInline]}>
+              Account Details
+            </Text>
+            {isEditingProfile ? (
+              <TouchableOpacity
+                style={s.editProfileButton}
+                activeOpacity={0.8}
+                onPress={handleCancelProfileEdit}
+              >
+                <Text style={s.editProfileButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={s.editProfileButton}
+                activeOpacity={0.8}
+                onPress={handleEditProfile}
+              >
+                <Text style={s.editProfileButtonText}>Edit Profile</Text>
+              </TouchableOpacity>
+            )}
           </View>
-        ) : null}
 
-        {message ? (
-          <View style={[s.banner, s.successBanner]}>
-            <Text style={s.successText}>{message}</Text>
-          </View>
-        ) : null}
-
-        <Section title="Travel Interests">
-          <Text style={s.helperText}>
-            These personalize generated itineraries.
-          </Text>
-          <View style={s.chipGrid}>
-            {categories.map((category) => {
-              const active = selectedInterestSet.has(category);
-              return (
-                <TouchableOpacity
-                  key={category}
-                  style={[s.chip, active ? s.chipActive : null]}
-                  onPress={() => toggleInterest(category)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[s.chipText, active ? s.chipTextActive : null]}>
-                    {formatInterest(category)}
-                  </Text>
-                  {descriptions[category] ? (
-                    <Text
-                      style={[
-                        s.chipDescription,
-                        active ? s.chipDescriptionActive : null,
-                      ]}
-                      numberOfLines={2}
-                    >
-                      {descriptions[category]}
-                    </Text>
-                  ) : null}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-          <ActionButton
-            title="Save Interests"
-            onPress={handleSaveInterests}
-            loading={interestLoading}
-            disabled={!token}
-          />
-        </Section>
-
-        <Section title="Generate Itinerary">
-          <Field
-            label="Destination"
-            value={destination}
-            onChangeText={setDestination}
-            placeholder="Paris"
-          />
-          <Field
-            label="Number of days"
-            value={numDays}
-            onChangeText={setNumDays}
-            placeholder="3"
-            keyboardType="numeric"
-          />
-          <ActionButton
-            title="Generate Itinerary"
-            onPress={handleGenerateItinerary}
-            loading={itineraryLoading}
-            disabled={!token}
-          />
-
-          {itinerary ? (
-            <View style={s.resultBlock}>
-              <Text style={s.resultTitle}>{itinerary.destination}</Text>
-              {itinerary.days.map((day) => (
-                <View key={day.day_number} style={s.dayBlock}>
-                  <Text style={s.dayTitle}>Day {day.day_number}</Text>
-                  {day.activities.map((activity, index) => (
-                    <View key={`${day.day_number}-${index}`} style={s.activity}>
-                      <Text style={s.activityTime}>{activity.time_slot}</Text>
-                      <Text style={s.activityTitle}>{activity.title}</Text>
-                      <Text style={s.activityDescription}>
-                        {activity.description}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              ))}
-
-              <View style={s.saveForm}>
-                <Field
-                  label="Start date"
-                  value={startDate}
-                  onChangeText={setStartDate}
-                  placeholder="2026-06-01"
+          {isEditingProfile ? (
+            <View style={s.profileForm}>
+              <View style={s.profileField}>
+                <Text style={s.infoLabel}>Name</Text>
+                <TextInput
+                  style={s.profileInput}
+                  value={profileName}
+                  onChangeText={setProfileName}
+                  placeholder="Your name"
+                  placeholderTextColor={C.slate400}
+                  autoCapitalize="words"
                 />
-                <Field
-                  label="End date"
-                  value={endDate}
-                  onChangeText={setEndDate}
-                  placeholder="2026-06-03"
+              </View>
+
+              <View style={s.profileField}>
+                <Text style={s.infoLabel}>Email</Text>
+                <TextInput
+                  style={s.profileInput}
+                  value={profileEmail}
+                  onChangeText={setProfileEmail}
+                  placeholder="you@example.com"
+                  placeholderTextColor={C.slate400}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
                 />
-                <Field
-                  label="Summary"
-                  value={summary}
-                  onChangeText={setSummary}
-                  placeholder="Short description for saved trips"
-                  multiline
+              </View>
+
+              <View style={s.passwordSection}>
+                <Text style={s.infoLabel}>Change Password</Text>
+                <Text style={s.passwordHint}>
+                  Leave these fields empty to keep your current password.
+                </Text>
+
+                <TextInput
+                  style={s.profileInput}
+                  value={currentPassword}
+                  onChangeText={setCurrentPassword}
+                  placeholder="Current password"
+                  placeholderTextColor={C.slate400}
+                  secureTextEntry
+                  autoCapitalize="none"
                 />
-                <ActionButton
-                  title="Save Trip"
-                  onPress={handleSaveTrip}
-                  loading={saveLoading}
+
+                <TextInput
+                  style={s.profileInput}
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  placeholder="New password"
+                  placeholderTextColor={C.slate400}
+                  secureTextEntry
+                  autoCapitalize="none"
+                />
+
+                <TextInput
+                  style={s.profileInput}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  placeholder="Confirm new password"
+                  placeholderTextColor={C.slate400}
+                  secureTextEntry
+                  autoCapitalize="none"
                 />
               </View>
             </View>
-          ) : null}
-        </Section>
-
-        <Section title="Optimize Budget">
-          <Field
-            label="Destination"
-            value={budgetDestination}
-            onChangeText={setBudgetDestination}
-            placeholder={destination || "Rome"}
-          />
-          <Field
-            label="Total budget in USD"
-            value={budget}
-            onChangeText={setBudget}
-            placeholder="800"
-            keyboardType="numeric"
-          />
-          <ActionButton
-            title="Create Budget Plan"
-            onPress={handleOptimizeBudget}
-            loading={budgetLoading}
-          />
-
-          {budgetPlan ? (
-            <View style={s.resultBlock}>
-              <Text style={s.resultTitle}>
-                {budgetPlan.destination} - ${budgetPlan.total_budget}
-              </Text>
-              {budgetPlan.recommendations.map((item, index) => (
-                <View key={`${item.category}-${index}`} style={s.recommendation}>
-                  <Text style={s.activityTitle}>
-                    {formatInterest(item.category)}
-                  </Text>
-                  <Text style={s.activityDescription}>
-                    {item.recommendation}
-                  </Text>
-                  <Text style={s.activityTime}>{item.estimated_cost}</Text>
-                </View>
-              ))}
-            </View>
-          ) : null}
-        </Section>
-
-        <Section title="Saved Trips">
-          <ActionButton
-            title="Refresh Trips"
-            onPress={refreshTrips}
-            loading={tripsLoading}
-            tone="secondary"
-          />
-
-          {trips.length === 0 ? (
-            <Text style={s.emptyText}>No saved trips yet.</Text>
           ) : (
-            <View style={s.tripList}>
-              {trips.map((trip) => (
-                <TouchableOpacity
-                  key={trip.id}
-                  style={s.tripItem}
-                  onPress={() => handleSelectTrip(trip.id)}
-                  activeOpacity={0.8}
-                >
-                  <View style={s.tripItemHeader}>
-                    <Text style={s.tripDestination}>{trip.destination}</Text>
-                    <Text style={s.statusPill}>{trip.status}</Text>
-                  </View>
-                  <Text style={s.tripMeta}>
-                    {trip.startDate} to {trip.endDate} · {tripDays(trip)} days
-                  </Text>
-                  <Text style={s.tripSummary}>{trip.summary}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            <>
+              <View style={s.infoRow}>
+                <Text style={s.infoLabel}>Name</Text>
+                <Text style={s.infoValue}>{user?.name}</Text>
+              </View>
+
+              <View style={s.divider} />
+
+              <View style={s.infoRow}>
+                <Text style={s.infoLabel}>Email</Text>
+                <Text style={s.infoValue}>{user?.email}</Text>
+              </View>
+            </>
           )}
 
-          {selectedTrip ? (
-            <View style={s.resultBlock}>
-              <Text style={s.resultTitle}>{selectedTrip.destination}</Text>
-              <Text style={s.tripMeta}>
-                {selectedTrip.startDate} to {selectedTrip.endDate}
-              </Text>
-              {selectedTrip.itinerary.days.map((day) => (
-                <View key={day.day_number} style={s.dayBlock}>
-                  <Text style={s.dayTitle}>Day {day.day_number}</Text>
-                  {day.activities.map((activity, index) => (
-                    <Text
-                      key={`${day.day_number}-${index}`}
-                      style={s.savedActivity}
-                    >
-                      {activity.time_slot} - {activity.title}
-                    </Text>
-                  ))}
-                </View>
-              ))}
+          <View style={s.divider} />
+
+          <View style={s.infoRow}>
+            <Text style={s.infoLabel}>User ID</Text>
+            <Text style={[s.infoValue, s.infoValueMuted]}>{user?.id}</Text>
+          </View>
+
+          <View style={s.divider} />
+
+          <View style={s.profileSection}>
+            <View style={s.profileSectionHeader}>
+              <Text style={s.infoLabel}>Travel Interests</Text>
+              {isLoadingInterests ? (
+                <ActivityIndicator size="small" color={C.teal600} />
+              ) : null}
             </View>
-          ) : null}
-        </Section>
+
+            {profileError ? (
+              <Text style={s.profileErrorText}>{profileError}</Text>
+            ) : null}
+
+            {isEditingProfile ? (
+              <>
+                <View style={s.interestsGrid}>
+                  {interestOptions.length > 0 ? (
+                    interestOptions.map((interest) => {
+                      const isSelected = selectedInterests.includes(
+                        interest.value
+                      );
+
+                      return (
+                        <TouchableOpacity
+                          key={interest.value}
+                          style={[
+                            s.interestChip,
+                            isSelected ? s.interestChipSelected : null,
+                          ]}
+                          accessibilityLabel={interest.description}
+                          activeOpacity={0.8}
+                          disabled={isSavingProfile}
+                          onPress={() => toggleInterest(interest.value)}
+                        >
+                          <Text
+                            style={[
+                              s.interestChipText,
+                              isSelected ? s.interestChipTextSelected : null,
+                            ]}
+                          >
+                            {formatInterestLabel(interest.value)}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })
+                  ) : (
+                    <Text style={s.emptyInterestsText}>
+                      No interest categories available.
+                    </Text>
+                  )}
+                </View>
+
+                <View style={s.profileActions}>
+                  <TouchableOpacity
+                    style={s.profileSecondaryButton}
+                    activeOpacity={0.8}
+                    disabled={isSavingProfile}
+                    onPress={handleCancelProfileEdit}
+                  >
+                    <Text style={s.profileSecondaryButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      s.profileSaveButton,
+                      isSavingProfile ? s.profileButtonDisabled : null,
+                    ]}
+                    activeOpacity={0.8}
+                    disabled={isSavingProfile}
+                    onPress={handleSaveProfile}
+                  >
+                    <Text style={s.profileSaveButtonText}>
+                      {isSavingProfile ? "Saving..." : "Save"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <View style={s.interestsGrid}>
+                {user?.interests.length ? (
+                  user.interests.map((interest) => (
+                    <View
+                      key={interest}
+                      style={[s.interestChip, s.interestChipSelected]}
+                    >
+                      <Text style={s.interestChipTextSelected}>
+                        {formatInterestLabel(interest)}
+                      </Text>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={s.emptyInterestsText}>
+                    No interests selected.
+                  </Text>
+                )}
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* ── Trip Search Form ── */}
+        <View style={s.sectionSpacing}>
+          <TripSearchForm onSubmit={handleTripSearch} />
+        </View>
+
+        {/* ── Loading Result ── */}
+        {isGeneratingTrip ? (
+          <View style={s.resultCard}>
+            <ActivityIndicator size="large" color={C.teal600} />
+            <Text style={s.resultLoadingText}>Generating itinerary...</Text>
+          </View>
+        ) : null}
+
+        {/* ── Error Result ── */}
+        {tripError ? (
+          <View style={s.errorCard}>
+            <Text style={s.errorTitle}>Trip generation failed</Text>
+            <Text style={s.errorMessage}>{tripError}</Text>
+          </View>
+        ) : null}
+
+        {/* ── AI Result ── */}
+        {itineraryResult ? (
+          <View style={s.resultCard}>
+            <View style={s.resultHeader}>
+              <Text style={[s.cardTitle, s.resultTitle]}>
+                AI Itinerary for {itineraryResult.destination || "your trip"}
+              </Text>
+              <TouchableOpacity
+                style={[
+                  s.saveTripButton,
+                  (isSavingTrip || !!savedTripId) && s.saveTripButtonDisabled,
+                ]}
+                activeOpacity={0.8}
+                disabled={isSavingTrip || !!savedTripId}
+                onPress={handleSaveGeneratedTrip}
+              >
+                <Text
+                  style={[
+                    s.saveTripButtonText,
+                    (isSavingTrip || !!savedTripId) &&
+                      s.saveTripButtonTextDisabled,
+                  ]}
+                >
+                  {savedTripId ? "Saved" : isSavingTrip ? "Saving..." : "Save"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {itineraryResult.days && itineraryResult.days.length > 0 ? (
+              itineraryResult.days.map((day, index) => (
+                <View key={index} style={s.dayResult}>
+                  <Text style={s.dayTitle}>
+                    Day {day.day_number || index + 1}
+                  </Text>
+
+                  {day.activities && day.activities.length > 0 ? (
+                    day.activities.map((activity, activityIndex) => (
+                      <View key={activityIndex} style={s.activityBox}>
+                        <Text style={s.activityTitle}>
+                          {activity.time_slot ? `${activity.time_slot} - ` : ""}
+                          {activity.title || "Activity"}
+                        </Text>
+
+                        {activity.description ? (
+                          <Text style={s.resultText}>
+                            {activity.description}
+                          </Text>
+                        ) : null}
+                      </View>
+                    ))
+                  ) : (
+                    <Text style={s.resultText}>No activities found.</Text>
+                  )}
+                </View>
+              ))
+            ) : (
+              <Text style={s.resultText}>
+                {JSON.stringify(itineraryResult, null, 2)}
+              </Text>
+            )}
+          </View>
+        ) : null}
+
+        {/* ── Features Placeholder ── */}
+        <View style={s.featuresCard}>
+          <Text style={s.cardTitle}>Features</Text>
+          <View style={s.featureItem}>
+            <Text style={s.featureIcon}>🗺️</Text>
+            <Text style={s.featureText}>Plan your perfect trip</Text>
+          </View>
+          <View style={s.featureItem}>
+            <Text style={s.featureIcon}>🤖</Text>
+            <Text style={s.featureText}>AI-powered recommendations</Text>
+          </View>
+          <View style={s.featureItem}>
+            <Text style={s.featureIcon}>📍</Text>
+            <Text style={s.featureText}>Discover hidden gems</Text>
+          </View>
+        </View>
+
+        {/* ── Logout Button ── */}
+        <TouchableOpacity
+          style={s.logoutButton}
+          onPress={handleLogout}
+          activeOpacity={0.8}
+        >
+          <Text style={s.logoutButtonText}>Sign Out</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: C.teal700,
   },
-  container: {
-    paddingHorizontal: 18,
-    paddingTop: 18,
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingVertical: 20,
     paddingBottom: 40,
+  },
+  sectionSpacing: {
+    marginBottom: 16,
   },
   loadingContainer: {
     flex: 1,
@@ -623,28 +814,27 @@ const s = StyleSheet.create({
   },
   loadingText: {
     marginTop: 16,
-    color: C.slate50,
+    color: C.white,
     fontSize: 14,
     fontWeight: "600",
   },
+
+  // Header
   header: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    marginBottom: 18,
+    marginBottom: 32,
+    gap: 16,
   },
   iconBadge: {
-    width: 54,
-    height: 54,
-    borderRadius: 16,
+    width: 64,
+    height: 64,
+    borderRadius: 20,
     backgroundColor: "rgba(255,255,255,0.2)",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.3)",
     alignItems: "center",
     justifyContent: "center",
-  },
-  iconText: {
-    fontSize: 30,
   },
   headerContent: {
     flex: 1,
@@ -667,194 +857,261 @@ const s = StyleSheet.create({
   },
   greeting: {
     color: C.teal100,
-    fontSize: 13,
-    fontWeight: "600",
+    fontSize: 14,
+    fontWeight: "500",
   },
   userName: {
     color: C.white,
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "800",
-    marginTop: 2,
+    marginTop: 4,
   },
-  userEmail: {
-    color: C.teal100,
-    fontSize: 12,
-    marginTop: 2,
-  },
-  signOutButton: {
-    backgroundColor: "rgba(255,255,255,0.16)",
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  signOutText: {
-    color: C.white,
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  banner: {
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-  },
-  errorBanner: {
-    backgroundColor: C.red50,
-  },
-  successBanner: {
-    backgroundColor: C.teal50,
-  },
-  errorText: {
-    color: C.red500,
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  successText: {
-    color: C.teal700,
-    fontSize: 13,
-    fontWeight: "600",
-  },
+
+  // Card
   card: {
     backgroundColor: C.slate50,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 14,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
   },
   cardTitle: {
     color: C.slate900,
-    fontSize: 17,
-    fontWeight: "800",
-    marginBottom: 12,
-  },
-  helperText: {
-    color: C.slate500,
-    fontSize: 13,
-    marginBottom: 12,
-  },
-  field: {
-    marginBottom: 12,
-  },
-  label: {
-    color: C.slate500,
-    fontSize: 12,
+    fontSize: 16,
     fontWeight: "700",
-    marginBottom: 6,
-    textTransform: "uppercase",
+    marginBottom: 16,
   },
-  input: {
-    backgroundColor: C.white,
-    borderColor: C.slate200,
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  cardTitleInline: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  editProfileButton: {
+    minWidth: 104,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: C.teal50,
     borderWidth: 1,
-    borderRadius: 10,
-    color: C.slate900,
-    fontSize: 15,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-  },
-  textArea: {
-    minHeight: 82,
-    textAlignVertical: "top",
-  },
-  button: {
-    backgroundColor: C.teal600,
-    borderRadius: 10,
-    paddingVertical: 13,
+    borderColor: C.teal200,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 4,
+    paddingHorizontal: 12,
   },
-  buttonSecondary: {
-    backgroundColor: C.teal50,
-    borderColor: C.teal600,
-    borderWidth: 1,
-  },
-  buttonDanger: {
-    backgroundColor: C.red500,
-  },
-  buttonDisabled: {
-    backgroundColor: C.slate200,
-    borderWidth: 0,
-  },
-  buttonText: {
-    color: C.white,
-    fontSize: 14,
+  editProfileButtonText: {
+    color: C.teal700,
+    fontSize: 13,
     fontWeight: "800",
   },
-  buttonTextSecondary: {
-    color: C.teal600,
+  infoRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 12,
   },
-  buttonTextDisabled: {
+  infoLabel: {
+    color: C.slate500,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  infoValue: {
+    color: C.slate900,
+    fontSize: 14,
+    fontWeight: "600",
+    flex: 1,
+    textAlign: "right",
+  },
+  infoValueMuted: {
     color: C.slate400,
+    fontSize: 12,
+    fontFamily: "monospace",
   },
-  chipGrid: {
+  divider: {
+    height: 1,
+    backgroundColor: C.slate200,
+  },
+  profileForm: {
+    gap: 14,
+    paddingBottom: 16,
+  },
+  profileField: {
+    gap: 8,
+  },
+  profileInput: {
+    width: "100%",
+    minHeight: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: C.slate200,
+    backgroundColor: C.white,
+    color: C.slate900,
+    fontSize: 15,
+    fontWeight: "600",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  passwordSection: {
+    gap: 8,
+    borderRadius: 14,
+    backgroundColor: C.white,
+    borderWidth: 1,
+    borderColor: C.slate200,
+    padding: 14,
+  },
+  passwordHint: {
+    color: C.slate500,
+    fontSize: 12,
+    fontWeight: "600",
+    lineHeight: 18,
+  },
+  profileSection: {
+    paddingTop: 16,
+  },
+  profileSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  profileErrorText: {
+    color: C.red500,
+    fontSize: 12,
+    fontWeight: "600",
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  interestsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
-    marginBottom: 12,
   },
-  chip: {
-    width: "48%",
-    backgroundColor: C.white,
-    borderColor: C.slate200,
+  interestChip: {
+    borderRadius: 999,
     borderWidth: 1,
-    borderRadius: 10,
-    padding: 10,
-    minHeight: 74,
+    borderColor: C.slate200,
+    backgroundColor: C.white,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
-  chipActive: {
-    backgroundColor: C.teal600,
+  interestChipSelected: {
     borderColor: C.teal600,
+    backgroundColor: C.teal50,
   },
-  chipText: {
-    color: C.slate900,
+  interestChipText: {
+    color: C.slate700,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  interestChipTextSelected: {
+    color: C.teal700,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  emptyInterestsText: {
+    color: C.slate500,
+    fontSize: 13,
+    fontWeight: "600",
+    lineHeight: 19,
+  },
+  profileActions: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 16,
+  },
+  profileSecondaryButton: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: C.slate100,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  profileSecondaryButtonText: {
+    color: C.slate500,
     fontSize: 13,
     fontWeight: "800",
-    marginBottom: 4,
   },
-  chipTextActive: {
+  profileSaveButton: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: C.teal600,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  profileButtonDisabled: {
+    backgroundColor: C.slate200,
+  },
+  profileSaveButtonText: {
     color: C.white,
+    fontSize: 13,
+    fontWeight: "800",
   },
-  chipDescription: {
-    color: C.slate500,
-    fontSize: 11,
-    lineHeight: 15,
+
+  // Result Card
+  resultCard: {
+    backgroundColor: C.slate50,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
   },
-  chipDescriptionActive: {
-    color: C.teal100,
-  },
-  resultBlock: {
-    marginTop: 14,
-    borderTopColor: C.slate200,
-    borderTopWidth: 1,
-    paddingTop: 14,
+  resultHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    marginBottom: 16,
   },
   resultTitle: {
-    color: C.slate900,
-    fontSize: 18,
-    fontWeight: "800",
-    marginBottom: 10,
+    flex: 1,
+    marginBottom: 0,
   },
-  dayBlock: {
-    marginBottom: 12,
+  saveTripButton: {
+    minWidth: 74,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: C.teal600,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  saveTripButtonDisabled: {
+    backgroundColor: C.slate200,
+  },
+  saveTripButtonText: {
+    color: C.white,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  saveTripButtonTextDisabled: {
+    color: C.slate500,
+  },
+  resultLoadingText: {
+    color: C.slate700,
+    fontSize: 14,
+    fontWeight: "600",
+    textAlign: "center",
+    marginTop: 12,
+  },
+  dayResult: {
+    backgroundColor: C.white,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
   },
   dayTitle: {
     color: C.teal700,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "800",
-    marginBottom: 6,
-  },
-  activity: {
-    backgroundColor: C.white,
-    borderColor: C.slate200,
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 10,
     marginBottom: 8,
   },
-  activityTime: {
-    color: C.teal600,
-    fontSize: 12,
-    fontWeight: "800",
-    marginBottom: 3,
+  activityBox: {
+    backgroundColor: C.slate50,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
   },
   activityTitle: {
     color: C.slate900,
@@ -862,73 +1119,70 @@ const s = StyleSheet.create({
     fontWeight: "800",
     marginBottom: 4,
   },
-  activityDescription: {
+  resultText: {
     color: C.slate700,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  saveForm: {
-    marginTop: 8,
-  },
-  recommendation: {
-    backgroundColor: C.white,
-    borderColor: C.slate200,
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 8,
-  },
-  emptyText: {
-    color: C.slate500,
-    fontSize: 13,
-    marginTop: 12,
-  },
-  tripList: {
-    marginTop: 12,
-    gap: 10,
-  },
-  tripItem: {
-    backgroundColor: C.white,
-    borderColor: C.slate200,
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-  },
-  tripItemHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+    fontSize: 14,
+    fontWeight: "500",
+    lineHeight: 20,
     marginBottom: 4,
   },
-  tripDestination: {
-    color: C.slate900,
-    fontSize: 15,
+
+  // Error Card
+  errorCard: {
+    backgroundColor: C.red100,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+  },
+  errorTitle: {
+    color: C.red800,
+    fontSize: 16,
     fontWeight: "800",
+    marginBottom: 8,
+  },
+  errorMessage: {
+    color: C.red900,
+    fontSize: 13,
+    fontWeight: "600",
+    lineHeight: 19,
+    marginBottom: 4,
+  },
+
+  // Features Card
+  featuresCard: {
+    backgroundColor: C.slate50,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 32,
+  },
+  featureItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 12,
+  },
+  featureIcon: {
+    fontSize: 24,
+  },
+  featureText: {
+    color: C.slate700,
+    fontSize: 14,
+    fontWeight: "500",
     flex: 1,
   },
-  statusPill: {
-    color: C.teal700,
-    backgroundColor: C.teal50,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    overflow: "hidden",
-    fontSize: 11,
-    fontWeight: "800",
+
+  // Logout Button
+  logoutButton: {
+    backgroundColor: C.red500,
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  tripMeta: {
-    color: C.slate500,
-    fontSize: 12,
-    marginBottom: 5,
-  },
-  tripSummary: {
-    color: C.slate700,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  savedActivity: {
-    color: C.slate700,
-    fontSize: 13,
-    lineHeight: 20,
+  logoutButtonText: {
+    color: C.white,
+    fontSize: 15,
+    fontWeight: "700",
+    letterSpacing: 0.4,
   },
 });

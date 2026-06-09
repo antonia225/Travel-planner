@@ -121,10 +121,11 @@ function getCalendarDays(displayedMonth: Date) {
 
 export default function TripSearchForm({ onSubmit }: Props) {
   const today = useMemo(() => new Date(), []);
+  const defaultStartDate = useMemo(() => addDays(today, 1), [today]);
 
   const [destination, setDestination] = useState("");
-  const [startDate, setStartDate] = useState(formatDate(today));
-  const [endDate, setEndDate] = useState(formatDate(addDays(today, 3)));
+  const [startDate, setStartDate] = useState(formatDate(defaultStartDate));
+  const [endDate, setEndDate] = useState(formatDate(addDays(defaultStartDate, 3)));
   const [travelers, setTravelers] = useState("1");
   const [budget, setBudget] = useState("");
 
