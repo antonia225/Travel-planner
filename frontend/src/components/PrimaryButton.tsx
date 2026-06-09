@@ -1,47 +1,123 @@
 import React from "react";
 import {
   ActivityIndicator,
+  StyleProp,
+  StyleSheet,
   Text,
   TouchableOpacity,
   TouchableOpacityProps,
+  View,
+  ViewStyle,
 } from "react-native";
+
+import { colors, radius, typography } from "../theme/designSystem";
 
 type Props = TouchableOpacityProps & {
   title: string;
   loading?: boolean;
+  icon?: React.ReactNode;
+  variant?: "primary" | "secondary" | "destructive";
+  fullWidth?: boolean;
+  style?: StyleProp<ViewStyle>;
 };
 
 export default function PrimaryButton({
   title,
   loading = false,
   disabled,
-  // Extract className so it doesn't overwrite the component's own className
-  // when callers spread extra utility classes (e.g. className="mt-8").
-  className: extraClassName = "",
+  icon,
+  variant = "primary",
+  fullWidth = true,
+  style,
   ...props
 }: Props) {
   const isDisabled = disabled || loading;
+  const buttonStyle = [
+    styles.button,
+    fullWidth ? styles.fullWidth : null,
+    variant === "primary" ? styles.primary : null,
+    variant === "secondary" ? styles.secondary : null,
+    variant === "destructive" ? styles.destructive : null,
+    isDisabled ? styles.disabled : null,
+    style,
+  ];
+  const textStyle = [
+    styles.text,
+    variant === "secondary" ? styles.secondaryText : null,
+    isDisabled ? styles.disabledText : null,
+  ];
+  const indicatorColor =
+    disabled && !loading
+      ? colors.slate400
+      : variant === "secondary"
+      ? colors.teal700
+      : colors.white;
 
   return (
     <TouchableOpacity
-      className={`items-center rounded-2xl py-4 ${
-        isDisabled ? "bg-slate-200" : "bg-teal-600"
-      } ${extraClassName}`.trim()}
+      style={buttonStyle}
       disabled={isDisabled}
-      activeOpacity={0.75}
+      activeOpacity={0.8}
       {...props}
     >
       {loading ? (
-        <ActivityIndicator color={isDisabled ? "#94a3b8" : "#ffffff"} />
+        <ActivityIndicator color={indicatorColor} />
       ) : (
-        <Text
-          className={`text-base font-bold tracking-wide ${
-            isDisabled ? "text-slate-400" : "text-white"
-          }`}
-        >
-          {title}
-        </Text>
+        <View style={styles.content}>
+          {icon ? <View style={styles.icon}>{icon}</View> : null}
+          <Text style={textStyle}>{title}</Text>
+        </View>
       )}
     </TouchableOpacity>
   );
 }
+
+const styles = StyleSheet.create({
+  button: {
+    alignItems: "center",
+    borderRadius: radius.lg,
+    justifyContent: "center",
+    minHeight: 52,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  fullWidth: {
+    width: "100%",
+  },
+  primary: {
+    backgroundColor: colors.teal600,
+  },
+  secondary: {
+    backgroundColor: colors.teal50,
+    borderColor: colors.teal200,
+    borderWidth: 1,
+  },
+  destructive: {
+    backgroundColor: colors.red500,
+  },
+  disabled: {
+    backgroundColor: colors.slate200,
+    borderColor: colors.slate200,
+  },
+  content: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
+  },
+  icon: {
+    marginRight: 8,
+  },
+  text: {
+    color: colors.white,
+    fontSize: 15,
+    fontWeight: "700",
+    letterSpacing: typography.buttonLetterSpacing,
+  },
+  secondaryText: {
+    color: colors.teal700,
+    fontWeight: "800",
+  },
+  disabledText: {
+    color: colors.slate400,
+  },
+});
