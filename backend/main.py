@@ -18,10 +18,12 @@ from repositories.trip_repository import TripRepository
 from repositories.user_interest_repository import UserInterestRepository
 from repositories.user_repository import UserRepository
 from schemas.auth import (
+    ChangePasswordRequest,
     LoginRequest,
     RegisterRequest,
     RegisterResponse,
     TokenResponse,
+    UpdateProfileRequest,
     UserProfile,
 )
 from schemas.interests import (
@@ -181,6 +183,66 @@ def read_current_user(current_user: User = Depends(get_current_user)) -> UserPro
     )
 
 
+@app.patch("/me", response_model=UserProfile)
+def update_current_user_profile(
+    payload: UpdateProfileRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UserProfile:
+    repo = UserRepository(db)
+    cleaned_name = payload.name.strip()
+    normalized_email = str(payload.email)
+
+    existing_user = repo.get_by_email(normalized_email)
+    if existing_user and existing_user.id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A user with this email already exists.",
+        )
+
+    updated_user = repo.update_profile(
+        current_user.id,
+        name=cleaned_name,
+        email=normalized_email,
+    )
+    if not updated_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found.",
+        )
+
+    return UserProfile(
+        id=updated_user.id,
+        name=updated_user.name,
+        email=updated_user.email,
+        interests=updated_user.interests or [],
+    )
+
+
+@app.put("/me/password", status_code=status.HTTP_204_NO_CONTENT)
+def change_current_user_password(
+    payload: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    if not verify_password(payload.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is incorrect.",
+        )
+
+    repo = UserRepository(db)
+    updated_user = repo.update_password(
+        current_user.id,
+        hashed_password=hash_password(payload.new_password),
+    )
+    if not updated_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found.",
+        )
+
+
 @app.put("/me/interests", response_model=UserProfile)
 def update_user_interests(
     payload: UserInterests,
@@ -238,6 +300,10 @@ def list_interest_categories() -> InterestCategoriesResponse:
 class ItineraryRequest(BaseModel):
     destination: str
     num_days: int
+    start_date: date | None = None
+    end_date: date | None = None
+    travelers: int = 1
+    budget: int | None = None
 
 
 class BudgetOptimizerRequest(BaseModel):
@@ -254,6 +320,10 @@ async def create_itinerary(
         return await generate_itinerary(
             destination=payload.destination,
             days=payload.num_days,
+            start_date=payload.start_date,
+            end_date=payload.end_date,
+            travelers=payload.travelers,
+            budget=payload.budget,
             user_interests=current_user.interests or [],
         )
     except ValueError as exc:

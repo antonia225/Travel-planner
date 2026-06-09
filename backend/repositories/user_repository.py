@@ -41,3 +41,20 @@ class UserRepository:
             self._db.commit()
             self._db.refresh(user)
         return user
+
+    def update_profile(self, user_id: int, name: str, email: str) -> Optional[User]:
+        user = self.get_by_id(user_id)
+        if user:
+            user.name = name
+            user.email = email
+            self._db.commit()
+            self._db.refresh(user)
+        return user
+
+    def update_password(self, user_id: int, hashed_password: str) -> Optional[User]:
+        user = self.get_by_id(user_id)
+        if user:
+            user.hashed_password = hashed_password
+            self._db.commit()
+            self._db.refresh(user)
+        return user

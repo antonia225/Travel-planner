@@ -49,6 +49,29 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class UpdateProfileRequest(BaseModel):
+    name: str = Field(..., min_length=1)
+    email: EmailStr
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Name cannot be empty.")
+        return cleaned
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password_strength(cls, value: str) -> str:
+        return RegisterRequest.validate_password_strength(value)
+
+
 class UserProfile(BaseModel):
     id: int
     name: str
