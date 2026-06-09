@@ -70,6 +70,54 @@ export type TripDetailsResponse = TripListResponse & {
   itinerary: ItineraryResponse;
 };
 
+export type SavedTrip = {
+  id: number;
+  user_id: number;
+  name: string;
+  trip_data: ItineraryResponse;
+  created_at: string;
+  updated_at: string;
+};
+
+function formatErrorDetail(detail: unknown): string {
+  if (typeof detail === "string") {
+    return detail;
+  }
+
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) => {
+        if (typeof item === "string") {
+          return item;
+        }
+
+        if (item && typeof item === "object") {
+          const record = item as Record<string, unknown>;
+          const location = Array.isArray(record.loc)
+            ? record.loc.join(".")
+            : undefined;
+          const message =
+            typeof record.msg === "string"
+              ? record.msg
+              : JSON.stringify(record);
+
+          return location ? `${location}: ${message}` : message;
+        }
+
+        return String(item);
+      })
+      .filter(Boolean);
+
+    return messages.join("\n");
+  }
+
+  if (detail && typeof detail === "object") {
+    return JSON.stringify(detail);
+  }
+
+  return "";
+}
+
 async function fetchJson<T>(
   path: string,
   options: RequestInit = {},
@@ -90,15 +138,10 @@ async function fetchJson<T>(
       },
     });
 
-      const errorData = await response.json().catch(() => null);
-      const detail = (errorData as { detail?: unknown } | null)?.detail;
-      const message =
-        typeof detail === "string"
-          ? detail
-          : detail != null
-            ? JSON.stringify(detail)
-            : `Backend error: ${response.status}`;
-      throw new Error(message);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const detail = formatErrorDetail(errorData?.detail) || "Request failed";
+      throw new Error(detail);
     }
 
     if (response.status === 204) {
@@ -129,6 +172,39 @@ export function updateMyInterests(
     {
       method: "PUT",
       body: JSON.stringify({ interests }),
+    },
+    token
+  );
+}
+
+export function updateMyProfile(
+  token: string,
+  name: string,
+  email: string
+): Promise<UserProfile> {
+  return fetchJson<UserProfile>(
+    "/me",
+    {
+      method: "PATCH",
+      body: JSON.stringify({ name, email }),
+    },
+    token
+  );
+}
+
+export function changeMyPassword(
+  token: string,
+  currentPassword: string,
+  newPassword: string
+): Promise<void> {
+  return fetchJson<void>(
+    "/me/password",
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword,
+      }),
     },
     token
   );
@@ -182,10 +258,58 @@ export function saveTrip(payload: {
   });
 }
 
-export function listSavedTrips(): Promise<TripListResponse[]> {
+export function saveGeneratedTrip(
+  token: string,
+  name: string,
+  tripData: ItineraryResponse
+): Promise<SavedTrip> {
+  return fetchJson<SavedTrip>(
+    "/saved-trips",
+    {
+      method: "POST",
+      body: JSON.stringify({ name, tripData }),
+    },
+    token
+  );
+}
+
+export function listSavedTrips(token: string): Promise<SavedTrip[]>;
+export function listSavedTrips(): Promise<TripListResponse[]>;
+export function listSavedTrips(
+  token?: string
+): Promise<SavedTrip[] | TripListResponse[]> {
+  if (token) {
+    return fetchJson<SavedTrip[]>("/saved-trips", {}, token);
+  }
+
   return fetchJson<TripListResponse[]>("/trips/saved");
 }
 
 export function getSavedTrip(tripId: number): Promise<TripDetailsResponse> {
   return fetchJson<TripDetailsResponse>(`/trips/${tripId}`);
+}
+
+export function renameSavedTrip(
+  token: string,
+  tripId: number,
+  name: string
+): Promise<SavedTrip> {
+  return fetchJson<SavedTrip>(
+    `/saved-trips/${tripId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ name }),
+    },
+    token
+  );
+}
+
+export function deleteSavedTrip(token: string, tripId: number): Promise<void> {
+  return fetchJson<void>(
+    `/saved-trips/${tripId}`,
+    {
+      method: "DELETE",
+    },
+    token
+  );
 }
