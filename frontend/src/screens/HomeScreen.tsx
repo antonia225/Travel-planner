@@ -1,4 +1,4 @@
-import React, { useEffect, useState }, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -383,14 +383,6 @@ export default function HomeScreen() {
     setConfirmPassword("");
     setProfileError(null);
     setIsEditingProfile(false);
-  };
-
-  const toggleInterest = (interest: string) => {
-    setSelectedInterests((current) =>
-      current.includes(interest)
-        ? current.filter((item) => item !== interest)
-        : [...current, interest]
-    );
   };
 
   const handleSaveProfile = async () => {
