@@ -117,3 +117,36 @@ def test_optimize_budget_returns_422_on_upstream_http_error(client, monkeypatch)
     assert response.status_code == 422
     assert "Ollama returned an error: 500" in response.json()["detail"]
     assert captured["url"] == _OLLAMA_GENERATE_URL
+
+
+def test_optimize_budget_accepts_model_keys_with_extra_whitespace(client, monkeypatch):
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            pass
+
+        def json(self) -> dict[str, str]:
+            return {
+                "response": json.dumps(
+                    {
+                        "destination": "Rome",
+                        "total_budget": 1000,
+                        "recommendations": [
+                            {
+                                "category ": "food",
+                                "recommendation": "Eat at local markets",
+                                "estimated_cost": "<30 USD per day",
+                            },
+                        ],
+                    }
+                )
+            }
+
+    _patch_async_client(monkeypatch, FakeResponse())
+
+    response = client.post(
+        "/optimize-budget",
+        json={"destination": "Rome", "budget": 1000},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["recommendations"][0]["category"] == "food"

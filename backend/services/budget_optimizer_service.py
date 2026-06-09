@@ -47,6 +47,19 @@ USER_PROMPT_TEMPLATE = (
 )
 
 
+def _normalize_model_json(value):
+    if isinstance(value, dict):
+        return {
+            key.strip() if isinstance(key, str) else key: _normalize_model_json(item)
+            for key, item in value.items()
+        }
+
+    if isinstance(value, list):
+        return [_normalize_model_json(item) for item in value]
+
+    return value
+
+
 async def generate_budget_plan(
     destination: str,
     budget: int,
@@ -96,6 +109,8 @@ async def generate_budget_plan(
 
         if isinstance(parsed, str):
             parsed = json.loads(parsed)
+
+        parsed = _normalize_model_json(parsed)
     except json.JSONDecodeError as exc:
         raise ValueError(
             f"Phi-3 returned invalid JSON: {raw_text[:300]}"
