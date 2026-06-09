@@ -90,13 +90,15 @@ async function fetchJson<T>(
       },
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      const detail =
-        typeof errorData?.detail === "string"
-          ? errorData.detail
-          : "Request failed";
-      throw new Error(detail);
+      const errorData = await response.json().catch(() => null);
+      const detail = (errorData as { detail?: unknown } | null)?.detail;
+      const message =
+        typeof detail === "string"
+          ? detail
+          : detail != null
+            ? JSON.stringify(detail)
+            : `Backend error: ${response.status}`;
+      throw new Error(message);
     }
 
     if (response.status === 204) {
