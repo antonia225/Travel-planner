@@ -135,8 +135,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!meResponse.ok) {
           throw new Error("Failed to fetch user profile after login");
         }
-        const meData = (await meResponse.json()) as RawUserProfile;
-        const newUser = normalizeUserProfile(meData);
+        const meData = await meResponse.json();
+        const newUser: User = {
+          id: meData.id as number,
+          email: meData.email as string,
+          name: meData.name as string,
+          interests: Array.isArray(meData.interests) ? meData.interests : [],
+        };
 
         setToken(newToken);
         setUser(newUser);

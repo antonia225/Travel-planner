@@ -1,5 +1,3 @@
-import Constants from "expo-constants";
-
 // ─── API Configuration ───────────────────────────────────────────────────────
 // Physical-device testing: replace YOUR_WIFI_IP with your computer's local IP.
 //   Windows → run `ipconfig`  and look for "IPv4 Address" (e.g. 192.168.1.42)
@@ -7,38 +5,46 @@ import Constants from "expo-constants";
 //
 // Example: http://192.168.1.42:8000
 //
-// By default we auto-detect your Expo dev host IP and use port 8000.
-// Alternatively, set the EXPO_PUBLIC_API_URL environment variable in a
-// .env.local file at the frontend root and it will take precedence.
+// Set EXPO_PUBLIC_API_URL in a .env.local file at the frontend root when
+// testing on a physical device. The emulator/default fallback is localhost.
 // ─────────────────────────────────────────────────────────────────────────────
-const host = Constants.expoConfig?.hostUri?.split(":")[0];
-const API_PORT = 8000;
-const autoDetectedBaseUrl = host
-  ? `http://${host}:${API_PORT}`
-  : `http://localhost:${API_PORT}`;
+export const BASE_URL =
+  process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
 
-export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? autoDetectedBaseUrl;
+const REQUEST_TIMEOUT_MS = 30_000;
+const AI_REQUEST_TIMEOUT_MS = 10 * 60_000;
 
-export type GeneratedTripData = {
-  destination?: string;
-  days?: {
-    day_number?: number;
-    activities?: {
-      title?: string;
-      description?: string;
-      time_slot?: string;
-    }[];
-  }[];
-  [key: string]: unknown;
+export type Activity = {
+  title: string;
+  description: string;
+  time_slot: string;
 };
 
-export type SavedTrip = {
-  id: number;
-  user_id: number;
-  name: string;
-  trip_data: GeneratedTripData;
-  created_at: string;
-  updated_at: string;
+export type DailySchedule = {
+  day_number: number;
+  activities: Activity[];
+};
+
+export type ItineraryResponse = {
+  destination: string;
+  days: DailySchedule[];
+};
+
+export type BudgetRecommendation = {
+  category: string;
+  recommendation: string;
+  estimated_cost: string;
+};
+
+export type BudgetOptimizerResponse = {
+  destination: string;
+  total_budget: number;
+  recommendations: BudgetRecommendation[];
+};
+
+export type InterestCategoriesResponse = {
+  categories: string[];
+  descriptions: Record<string, string>;
 };
 
 export type UserProfile = {
@@ -48,156 +54,136 @@ export type UserProfile = {
   interests: string[];
 };
 
-export type InterestCategoriesResponse = {
-  categories: string[];
-  descriptions: Record<string, string>;
+export type TripListResponse = {
+  id: number;
+  destination: string;
+  startDate: string;
+  endDate: string;
+  numberOfDays?: number;
+  duration_days?: number;
+  summary: string;
+  createdAt: string;
+  status: "upcoming" | "past";
 };
 
-type BackendErrorResponse = {
-  detail?: unknown;
+export type TripDetailsResponse = TripListResponse & {
+  itinerary: ItineraryResponse;
 };
 
-function formatBackendDetail(detail: unknown) {
-  if (typeof detail === "string") {
-    return detail;
-  }
-
-  if (Array.isArray(detail)) {
-    return detail
-      .map((item) => {
-        if (
-          item &&
-          typeof item === "object" &&
-          "msg" in item &&
-          typeof item.msg === "string"
-        ) {
-          return item.msg;
-        }
-
-        return JSON.stringify(item);
-      })
-      .join("; ");
-  }
-
-  if (detail) {
-    return JSON.stringify(detail);
-  }
-
-  return null;
-}
-
-async function request<T>(
+async function fetchJson<T>(
   path: string,
-  token: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  token?: string | null,
+  timeoutMs = REQUEST_TIMEOUT_MS
 ): Promise<T> {
-  const response = await fetch(`${BASE_URL}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      ...options.headers,
+  const controller = new AbortController();
+  const timerId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(`${BASE_URL}${path}`, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options.headers ?? {}),
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const detail =
+        typeof errorData?.detail === "string"
+          ? errorData.detail
+          : "Request failed";
+      throw new Error(detail);
+    }
+
+    if (response.status === 204) {
+      return undefined as T;
+    }
+
+    return (await response.json()) as T;
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("Request timed out. Please try again.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timerId);
+  }
+}
+
+export function getMe(token: string): Promise<UserProfile> {
+  return fetchJson<UserProfile>("/me", {}, token);
+}
+
+export function updateMyInterests(
+  token: string,
+  interests: string[]
+): Promise<UserProfile> {
+  return fetchJson<UserProfile>(
+    "/me/interests",
+    {
+      method: "PUT",
+      body: JSON.stringify({ interests }),
     },
-  });
-
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  const result = (await response.json().catch(() => null)) as
-    | T
-    | BackendErrorResponse
-    | null;
-
-  if (!response.ok) {
-    const message =
-      result &&
-      typeof result === "object" &&
-      "detail" in result
-        ? formatBackendDetail(result.detail)
-        : null;
-    throw new Error(message || `Backend error: ${response.status}`);
-  }
-
-  return result as T;
+    token
+  );
 }
 
-export function listSavedTrips(token: string) {
-  return request<SavedTrip[]>("/saved-trips", token);
+export function getInterestCategories(): Promise<InterestCategoriesResponse> {
+  return fetchJson<InterestCategoriesResponse>("/interests/categories");
 }
 
-export function readSavedTrip(token: string, tripId: number) {
-  return request<SavedTrip>(`/saved-trips/${tripId}`, token);
-}
-
-export function saveGeneratedTrip(
+export function generateItinerary(
   token: string,
-  name: string,
-  tripData: GeneratedTripData
-) {
-  return request<SavedTrip>("/saved-trips", token, {
+  destination: string,
+  numDays: number
+): Promise<ItineraryResponse> {
+  return fetchJson<ItineraryResponse>(
+    "/generate-itinerary",
+    {
+      method: "POST",
+      body: JSON.stringify({ destination, num_days: numDays }),
+    },
+    token,
+    AI_REQUEST_TIMEOUT_MS
+  );
+}
+
+export function optimizeBudget(
+  destination: string,
+  budget: number
+): Promise<BudgetOptimizerResponse> {
+  return fetchJson<BudgetOptimizerResponse>(
+    "/optimize-budget",
+    {
+      method: "POST",
+      body: JSON.stringify({ destination, budget }),
+    },
+    null,
+    AI_REQUEST_TIMEOUT_MS
+  );
+}
+
+export function saveTrip(payload: {
+  destination: string;
+  startDate: string;
+  endDate: string;
+  summary: string;
+  itinerary: ItineraryResponse;
+}): Promise<TripDetailsResponse> {
+  return fetchJson<TripDetailsResponse>("/trips/save", {
     method: "POST",
-    body: JSON.stringify({ name, tripData }),
+    body: JSON.stringify(payload),
   });
 }
 
-export function renameSavedTrip(token: string, tripId: number, name: string) {
-  return request<SavedTrip>(`/saved-trips/${tripId}`, token, {
-    method: "PATCH",
-    body: JSON.stringify({ name }),
-  });
+export function listSavedTrips(): Promise<TripListResponse[]> {
+  return fetchJson<TripListResponse[]>("/trips/saved");
 }
 
-export function deleteSavedTrip(token: string, tripId: number) {
-  return request<void>(`/saved-trips/${tripId}`, token, {
-    method: "DELETE",
-  });
-}
-
-export async function listInterestCategories() {
-  const response = await fetch(`${BASE_URL}/interests/categories`);
-  const result = (await response.json().catch(() => null)) as
-    | InterestCategoriesResponse
-    | BackendErrorResponse
-    | null;
-
-  if (!response.ok) {
-    const message =
-      result &&
-      typeof result === "object" &&
-      "detail" in result
-        ? formatBackendDetail(result.detail)
-        : null;
-    throw new Error(message || `Backend error: ${response.status}`);
-  }
-
-  return result as InterestCategoriesResponse;
-}
-
-export function updateMyInterests(token: string, interests: string[]) {
-  return request<UserProfile>("/me/interests", token, {
-    method: "PUT",
-    body: JSON.stringify({ interests }),
-  });
-}
-
-export function updateMyProfile(token: string, name: string, email: string) {
-  return request<UserProfile>("/me", token, {
-    method: "PATCH",
-    body: JSON.stringify({ name, email }),
-  });
-}
-
-export function changeMyPassword(
-  token: string,
-  currentPassword: string,
-  newPassword: string
-) {
-  return request<void>("/me/password", token, {
-    method: "PUT",
-    body: JSON.stringify({
-      current_password: currentPassword,
-      new_password: newPassword,
-    }),
-  });
+export function getSavedTrip(tripId: number): Promise<TripDetailsResponse> {
+  return fetchJson<TripDetailsResponse>(`/trips/${tripId}`);
 }
