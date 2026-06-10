@@ -4,16 +4,31 @@ import {
   Alert,
   Modal,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
+  StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { Trash2, Edit3, Eye, X, Check, ArrowLeft } from "lucide-react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  ArrowLeft,
+  CalendarDays,
+  Check,
+  Edit3,
+  Eye,
+  FolderOpen,
+  MapPin,
+  Trash2,
+  X,
+} from "lucide-react-native";
 import { useFocusEffect } from "@react-navigation/native";
 
+import AppCard from "../components/AppCard";
+import CustomInput from "../components/CustomInput";
+import ItineraryTimeline from "../components/ItineraryTimeline";
+import PrimaryButton from "../components/PrimaryButton";
+import SectionHeader from "../components/SectionHeader";
 import { useAuth } from "../context/AuthContext";
 import {
   deleteSavedTrip,
@@ -21,6 +36,7 @@ import {
   renameSavedTrip,
   SavedTrip,
 } from "../services/api";
+import { colors, radius, shadows, spacing } from "../theme/designSystem";
 
 type Props = {
   navigation: {
@@ -35,7 +51,7 @@ function getTripSummary(trip: SavedTrip) {
     : 0;
 
   if (days > 0) {
-    return `${destination} • ${days} ${days === 1 ? "day" : "days"}`;
+    return `${destination} - ${days} ${days === 1 ? "day" : "days"}`;
   }
 
   return destination;
@@ -77,10 +93,7 @@ export default function LibraryScreen({ navigation }: Props) {
           return;
         }
 
-        Alert.alert(
-          "Could not load library",
-          message
-        );
+        Alert.alert("Could not load library", message);
       } finally {
         refreshing ? setIsRefreshing(false) : setIsLoading(false);
       }
@@ -160,178 +173,411 @@ export default function LibraryScreen({ navigation }: Props) {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-teal-700">
-      <View className="flex-row items-center px-5 py-4">
+    <SafeAreaView style={styles.root}>
+      <View style={styles.header}>
         <TouchableOpacity
-          className="h-11 w-11 items-center justify-center rounded-full bg-white/15"
-          activeOpacity={0.75}
+          style={styles.backButton}
+          activeOpacity={0.8}
           onPress={navigation.goBack}
         >
-          <ArrowLeft color="#ffffff" size={22} />
+          <ArrowLeft color={colors.white} size={22} strokeWidth={2.4} />
         </TouchableOpacity>
-        <View className="ml-4 flex-1">
-          <Text className="text-sm font-semibold text-teal-100">User library</Text>
-          <Text className="text-2xl font-extrabold text-white">Saved trips</Text>
+
+        <View style={styles.headerCopy}>
+          <Text style={styles.headerKicker}>User library</Text>
+          <Text style={styles.headerTitle}>Saved trips</Text>
+        </View>
+
+        <View style={styles.countBadge}>
+          <Text style={styles.countText}>{savedTrips.length}</Text>
         </View>
       </View>
 
       <ScrollView
-        className="flex-1"
-        contentContainerClassName="px-5 pb-10"
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={() => loadSavedTrips(true)}
-            tintColor="#ffffff"
+            tintColor={colors.white}
           />
         }
       >
         {isLoading ? (
-          <View className="mt-10 rounded-2xl bg-slate-50 p-6">
-            <ActivityIndicator color="#0d9488" />
-            <Text className="mt-3 text-center text-sm font-semibold text-slate-600">
-              Loading saved trips...
-            </Text>
-          </View>
+          <AppCard elevated style={styles.feedbackCard}>
+            <ActivityIndicator color={colors.teal600} />
+            <Text style={styles.feedbackText}>Loading saved trips...</Text>
+          </AppCard>
         ) : null}
 
         {!isLoading && savedTrips.length === 0 ? (
-          <View className="mt-6 rounded-2xl bg-slate-50 p-6">
-            <Text className="text-base font-bold text-slate-900">No saved trips yet</Text>
-            <Text className="mt-2 text-sm font-medium leading-5 text-slate-600">
+          <AppCard elevated style={styles.emptyCard}>
+            <View style={styles.emptyIcon}>
+              <FolderOpen color={colors.teal700} size={24} strokeWidth={2.2} />
+            </View>
+            <Text style={styles.emptyTitle}>No saved trips yet</Text>
+            <Text style={styles.emptyText}>
               Generate an itinerary from Home and save it to see it here.
             </Text>
-          </View>
+          </AppCard>
         ) : null}
 
         {savedTrips.map((trip) => (
-          <View key={trip.id} className="mb-3 rounded-2xl bg-slate-50 p-4">
-            <View className="flex-row items-start">
-              <View className="flex-1 pr-3">
-                <Text className="text-base font-extrabold text-slate-900">{trip.name}</Text>
-                <Text className="mt-1 text-sm font-semibold text-slate-500">
-                  {getTripSummary(trip)}
-                </Text>
-                <Text className="mt-2 text-xs font-semibold text-slate-400">
-                  Updated {formatDate(trip.updated_at)}
-                </Text>
+          <AppCard key={trip.id} elevated style={styles.tripCard}>
+            <View style={styles.tripHeader}>
+              <View style={styles.tripIcon}>
+                <MapPin color={colors.teal700} size={20} strokeWidth={2.4} />
+              </View>
+              <View style={styles.tripCopy}>
+                <Text style={styles.tripName}>{trip.name}</Text>
+                <Text style={styles.tripSummary}>{getTripSummary(trip)}</Text>
+                <View style={styles.updatedRow}>
+                  <CalendarDays
+                    color={colors.slate400}
+                    size={14}
+                    strokeWidth={2.3}
+                  />
+                  <Text style={styles.updatedText}>
+                    Updated {formatDate(trip.updated_at)}
+                  </Text>
+                </View>
               </View>
             </View>
 
-            <View className="mt-4 flex-row gap-2">
-              <TouchableOpacity
-                className="h-11 flex-1 flex-row items-center justify-center rounded-xl bg-teal-600"
-                activeOpacity={0.75}
+            <View style={styles.actionRow}>
+              <PrimaryButton
+                title="View"
+                icon={<Eye color={colors.white} size={18} strokeWidth={2.4} />}
                 onPress={() => setSelectedTrip(trip)}
-              >
-                <Eye color="#ffffff" size={18} />
-                <Text className="ml-2 text-sm font-bold text-white">View</Text>
-              </TouchableOpacity>
+                style={styles.viewButton}
+              />
               <TouchableOpacity
-                className="h-11 w-11 items-center justify-center rounded-xl bg-slate-200"
-                activeOpacity={0.75}
+                style={styles.iconButton}
+                activeOpacity={0.8}
                 onPress={() => openRename(trip)}
               >
-                <Edit3 color="#334155" size={18} />
+                <Edit3 color={colors.slate700} size={18} strokeWidth={2.4} />
               </TouchableOpacity>
               <TouchableOpacity
-                className="h-11 w-11 items-center justify-center rounded-xl bg-red-100"
-                activeOpacity={0.75}
+                style={[styles.iconButton, styles.deleteButton]}
+                activeOpacity={0.8}
                 onPress={() => confirmDelete(trip)}
               >
-                <Trash2 color="#991b1b" size={18} />
+                <Trash2 color={colors.red700} size={18} strokeWidth={2.4} />
               </TouchableOpacity>
             </View>
-          </View>
+          </AppCard>
         ))}
       </ScrollView>
 
-      <Modal visible={!!selectedTrip} animationType="slide" onRequestClose={() => setSelectedTrip(null)}>
-        <SafeAreaView className="flex-1 bg-slate-50">
-          <View className="flex-row items-center border-b border-slate-200 px-5 py-4">
-            <View className="flex-1 pr-3">
-              <Text className="text-xs font-bold uppercase text-teal-700">Saved trip</Text>
-              <Text className="text-xl font-extrabold text-slate-900">{selectedTrip?.name}</Text>
+      <Modal
+        visible={!!selectedTrip}
+        animationType="slide"
+        onRequestClose={() => setSelectedTrip(null)}
+      >
+        <SafeAreaView style={styles.modalRoot}>
+          <View style={styles.modalHeader}>
+            <View style={styles.modalTitleWrap}>
+              <Text style={styles.modalKicker}>Saved trip</Text>
+              <Text style={styles.modalTitle}>{selectedTrip?.name}</Text>
             </View>
             <TouchableOpacity
-              className="h-10 w-10 items-center justify-center rounded-full bg-slate-200"
-              activeOpacity={0.75}
+              style={styles.closeButton}
+              activeOpacity={0.8}
               onPress={() => setSelectedTrip(null)}
             >
-              <X color="#334155" size={20} />
+              <X color={colors.slate700} size={20} strokeWidth={2.4} />
             </TouchableOpacity>
           </View>
 
-          <ScrollView contentContainerClassName="p-5 pb-10">
-            {selectedTrip?.trip_data.days?.map((day, index) => (
-              <View key={index} className="mb-3 rounded-2xl bg-white p-4">
-                <Text className="mb-3 text-base font-extrabold text-teal-700">
-                  Day {day.day_number || index + 1}
+          <ScrollView
+            contentContainerStyle={styles.modalContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {selectedTrip?.trip_data.days?.length ? (
+              <ItineraryTimeline days={selectedTrip.trip_data.days} />
+            ) : (
+              <AppCard>
+                <Text style={styles.rawTripText}>
+                  {JSON.stringify(selectedTrip?.trip_data, null, 2)}
                 </Text>
-                {day.activities?.map((activity, activityIndex) => (
-                  <View key={activityIndex} className="mb-2 rounded-xl bg-slate-50 p-3">
-                    <Text className="text-sm font-extrabold text-slate-900">
-                      {activity.time_slot ? `${activity.time_slot} - ` : ""}
-                      {activity.title || "Activity"}
-                    </Text>
-                    {activity.description ? (
-                      <Text className="mt-1 text-sm font-medium leading-5 text-slate-600">
-                        {activity.description}
-                      </Text>
-                    ) : null}
-                  </View>
-                ))}
-              </View>
-            )) || (
-              <Text className="rounded-2xl bg-white p-4 text-sm font-medium leading-5 text-slate-700">
-                {JSON.stringify(selectedTrip?.trip_data, null, 2)}
-              </Text>
+              </AppCard>
             )}
           </ScrollView>
         </SafeAreaView>
       </Modal>
 
-      <Modal transparent visible={!!tripToRename} animationType="fade" onRequestClose={() => setTripToRename(null)}>
-        <View className="flex-1 justify-center bg-black/40 px-5">
-          <View className="rounded-2xl bg-white p-5">
-            <Text className="text-lg font-extrabold text-slate-900">Rename trip</Text>
-            <TextInput
-              className="mt-4 rounded-xl border border-slate-200 px-4 py-3 text-base font-semibold text-slate-900"
+      <Modal
+        transparent
+        visible={!!tripToRename}
+        animationType="fade"
+        onRequestClose={() => setTripToRename(null)}
+      >
+        <View style={styles.renameOverlay}>
+          <AppCard elevated style={styles.renameCard}>
+            <SectionHeader eyebrow="Library" title="Rename trip" />
+            <CustomInput
+              label="Trip name"
               value={renameValue}
               onChangeText={setRenameValue}
               autoFocus
               placeholder="Trip name"
-              placeholderTextColor="#94a3b8"
             />
-            <View className="mt-5 flex-row gap-3">
-              <TouchableOpacity
-                className="h-12 flex-1 items-center justify-center rounded-xl bg-slate-200"
-                activeOpacity={0.75}
+            <View style={styles.renameActions}>
+              <PrimaryButton
+                title="Cancel"
+                variant="secondary"
                 onPress={() => setTripToRename(null)}
-              >
-                <Text className="text-sm font-bold text-slate-700">Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className={`h-12 flex-1 flex-row items-center justify-center rounded-xl ${
-                  renameValue.trim() ? "bg-teal-600" : "bg-slate-200"
-                }`}
-                activeOpacity={0.75}
+                style={styles.renameButton}
+              />
+              <PrimaryButton
+                title="Save"
+                loading={isRenaming}
                 disabled={!renameValue.trim() || isRenaming}
+                icon={<Check color={colors.white} size={18} strokeWidth={2.4} />}
                 onPress={submitRename}
-              >
-                {isRenaming ? (
-                  <ActivityIndicator color="#ffffff" />
-                ) : (
-                  <>
-                    <Check color="#ffffff" size={18} />
-                    <Text className="ml-2 text-sm font-bold text-white">Save</Text>
-                  </>
-                )}
-              </TouchableOpacity>
+                style={styles.renameButton}
+              />
             </View>
-          </View>
+          </AppCard>
         </View>
       </Modal>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    backgroundColor: colors.teal700,
+    flex: 1,
+  },
+  header: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.md,
+    paddingBottom: spacing.xl,
+    paddingHorizontal: 20,
+    paddingTop: spacing.lg,
+  },
+  backButton: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.16)",
+    borderColor: "rgba(255,255,255,0.25)",
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    height: 44,
+    justifyContent: "center",
+    width: 44,
+  },
+  headerCopy: {
+    flex: 1,
+  },
+  headerKicker: {
+    color: colors.teal100,
+    fontSize: 12,
+    fontWeight: "700",
+    marginBottom: 3,
+  },
+  headerTitle: {
+    color: colors.white,
+    fontSize: 28,
+    fontWeight: "800",
+    lineHeight: 34,
+  },
+  countBadge: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.16)",
+    borderColor: "rgba(255,255,255,0.25)",
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    height: 44,
+    justifyContent: "center",
+    minWidth: 44,
+    paddingHorizontal: spacing.md,
+  },
+  countText: {
+    color: colors.white,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  scroll: {
+    backgroundColor: colors.slate50,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
+    flex: 1,
+  },
+  scrollContent: {
+    gap: spacing.lg,
+    paddingBottom: 42,
+    paddingHorizontal: 20,
+    paddingTop: 28,
+  },
+  feedbackCard: {
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  feedbackText: {
+    color: colors.slate600,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  emptyCard: {
+    alignItems: "center",
+  },
+  emptyIcon: {
+    alignItems: "center",
+    backgroundColor: colors.teal50,
+    borderRadius: radius.lg,
+    height: 52,
+    justifyContent: "center",
+    marginBottom: spacing.md,
+    width: 52,
+  },
+  emptyTitle: {
+    color: colors.slate900,
+    fontSize: 17,
+    fontWeight: "800",
+    marginBottom: spacing.xs,
+    textAlign: "center",
+  },
+  emptyText: {
+    color: colors.slate500,
+    fontSize: 14,
+    fontWeight: "600",
+    lineHeight: 20,
+    textAlign: "center",
+  },
+  tripCard: {
+    gap: spacing.lg,
+  },
+  tripHeader: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: spacing.md,
+  },
+  tripIcon: {
+    alignItems: "center",
+    backgroundColor: colors.teal50,
+    borderRadius: radius.lg,
+    height: 44,
+    justifyContent: "center",
+    width: 44,
+  },
+  tripCopy: {
+    flex: 1,
+  },
+  tripName: {
+    color: colors.slate900,
+    fontSize: 17,
+    fontWeight: "800",
+    lineHeight: 23,
+  },
+  tripSummary: {
+    color: colors.slate600,
+    fontSize: 14,
+    fontWeight: "600",
+    lineHeight: 20,
+    marginTop: 4,
+  },
+  updatedRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  updatedText: {
+    color: colors.slate400,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  actionRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  viewButton: {
+    flex: 1,
+    minHeight: 46,
+    paddingVertical: 12,
+  },
+  iconButton: {
+    alignItems: "center",
+    backgroundColor: colors.slate100,
+    borderRadius: radius.lg,
+    height: 46,
+    justifyContent: "center",
+    width: 46,
+  },
+  deleteButton: {
+    backgroundColor: colors.red50,
+    borderColor: colors.redBorder,
+    borderWidth: 1,
+  },
+  modalRoot: {
+    backgroundColor: colors.slate50,
+    flex: 1,
+  },
+  modalHeader: {
+    alignItems: "center",
+    backgroundColor: colors.white,
+    borderBottomColor: colors.slate200,
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    gap: spacing.md,
+    paddingHorizontal: 20,
+    paddingVertical: spacing.lg,
+  },
+  modalTitleWrap: {
+    flex: 1,
+  },
+  modalKicker: {
+    color: colors.teal700,
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+    marginBottom: 4,
+    textTransform: "uppercase",
+  },
+  modalTitle: {
+    color: colors.slate900,
+    fontSize: 20,
+    fontWeight: "800",
+    lineHeight: 26,
+  },
+  closeButton: {
+    alignItems: "center",
+    backgroundColor: colors.slate100,
+    borderRadius: radius.lg,
+    height: 42,
+    justifyContent: "center",
+    width: 42,
+  },
+  modalContent: {
+    padding: 20,
+    paddingBottom: 42,
+  },
+  rawTripText: {
+    color: colors.slate700,
+    fontSize: 13,
+    fontWeight: "500",
+    lineHeight: 19,
+  },
+  renameOverlay: {
+    backgroundColor: colors.overlay,
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
+  renameCard: {
+    ...shadows.card,
+  },
+  renameActions: {
+    flexDirection: "row",
+    gap: spacing.md,
+    marginTop: spacing.xl,
+  },
+  renameButton: {
+    flex: 1,
+  },
+});

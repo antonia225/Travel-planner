@@ -3,10 +3,21 @@ import {
   Modal,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Sparkles,
+} from "lucide-react-native";
+
+import AppCard from "./AppCard";
+import CustomInput from "./CustomInput";
+import PrimaryButton from "./PrimaryButton";
+import SectionHeader from "./SectionHeader";
+import { colors, radius, shadows, spacing } from "../theme/designSystem";
 
 type TripSearchData = {
   destination: string;
@@ -21,23 +32,6 @@ type Props = {
 };
 
 type DateField = "startDate" | "endDate";
-
-const C = {
-  teal700: "#0f766e",
-  teal600: "#0d9488",
-  teal50: "#f0fdfa",
-  slate900: "#0f172a",
-  slate700: "#334155",
-  slate500: "#64748b",
-  slate400: "#94a3b8",
-  slate200: "#e2e8f0",
-  slate100: "#f1f5f9",
-  slate50: "#f8fafc",
-  white: "#ffffff",
-  red400: "#f87171",
-  red500: "#ef4444",
-  blackTransparent: "rgba(0, 0, 0, 0.4)",
-};
 
 const WEEK_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTH_NAMES = [
@@ -232,88 +226,71 @@ export default function TripSearchForm({ onSubmit }: Props) {
     onSubmit?.(tripData);
   };
 
+  const renderDateField = (label: string, value: string, field: DateField) => {
+    const error = errors[field];
+
+    return (
+      <View style={styles.dateField}>
+        <Text style={styles.label}>{label}</Text>
+        <TouchableOpacity
+          style={[styles.dateButton, error ? styles.inputError : null]}
+          activeOpacity={0.8}
+          onPress={() => openCalendar(field)}
+        >
+          <CalendarDays color={colors.teal700} size={18} strokeWidth={2.3} />
+          <Text style={styles.dateButtonText}>{value}</Text>
+        </TouchableOpacity>
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      </View>
+    );
+  };
+
   return (
-    <View style={s.card}>
-      <Text style={s.title}>Plan a new trip</Text>
+    <AppCard elevated style={styles.card}>
+      <SectionHeader eyebrow="AI planner" title="Plan a new trip" />
 
-      <Text style={s.subtitle}>
-        Fill in your travel details so the AI planner can generate a personalized
-        itinerary.
-      </Text>
+      <CustomInput
+        label="Destination"
+        error={errors.destination}
+        placeholder="e.g. Paris, Rome, Tokyo"
+        value={destination}
+        onChangeText={setDestination}
+        autoCapitalize="words"
+        containerStyle={styles.field}
+      />
 
-      <View style={s.field}>
-        <Text style={s.label}>Destination</Text>
-        <TextInput
-          style={[s.input, errors.destination ? s.inputError : null]}
-          placeholder="e.g. Paris, Rome, Tokyo"
-          placeholderTextColor={C.slate400}
-          value={destination}
-          onChangeText={setDestination}
-          autoCapitalize="words"
-        />
-        {errors.destination ? (
-          <Text style={s.errorText}>{errors.destination}</Text>
-        ) : null}
+      <View style={styles.fieldRow}>
+        {renderDateField("Start Date", startDate, "startDate")}
+        {renderDateField("End Date", endDate, "endDate")}
       </View>
 
-      <View style={s.field}>
-        <Text style={s.label}>Start Date</Text>
-        <TouchableOpacity
-          style={s.dateButton}
-          activeOpacity={0.75}
-          onPress={() => openCalendar("startDate")}
-        >
-          <Text style={s.dateButtonText}>{startDate}</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={s.field}>
-        <Text style={s.label}>End Date</Text>
-        <TouchableOpacity
-          style={[s.dateButton, errors.endDate ? s.inputError : null]}
-          activeOpacity={0.75}
-          onPress={() => openCalendar("endDate")}
-        >
-          <Text style={s.dateButtonText}>{endDate}</Text>
-        </TouchableOpacity>
-        {errors.endDate ? <Text style={s.errorText}>{errors.endDate}</Text> : null}
-      </View>
-
-      <View style={s.field}>
-        <Text style={s.label}>Travelers</Text>
-        <TextInput
-          style={[s.input, errors.travelers ? s.inputError : null]}
-          placeholder="e.g. 2"
-          placeholderTextColor={C.slate400}
+      <View style={styles.fieldRow}>
+        <CustomInput
+          label="Travelers"
+          error={errors.travelers}
+          placeholder="2"
           value={travelers}
           onChangeText={setTravelers}
           keyboardType="number-pad"
+          containerStyle={styles.splitField}
         />
-        {errors.travelers ? (
-          <Text style={s.errorText}>{errors.travelers}</Text>
-        ) : null}
-      </View>
-
-      <View style={s.field}>
-        <Text style={s.label}>Budget</Text>
-        <TextInput
-          style={[s.input, errors.budget ? s.inputError : null]}
-          placeholder="e.g. 800"
-          placeholderTextColor={C.slate400}
+        <CustomInput
+          label="Budget"
+          error={errors.budget}
+          placeholder="800"
           value={budget}
           onChangeText={setBudget}
           keyboardType="numeric"
+          containerStyle={styles.splitField}
         />
-        {errors.budget ? <Text style={s.errorText}>{errors.budget}</Text> : null}
       </View>
 
-      <TouchableOpacity
-        style={s.submitButton}
-        activeOpacity={0.8}
+      <PrimaryButton
+        title="Generate Trip"
+        icon={<Sparkles color={colors.white} size={18} strokeWidth={2.4} />}
         onPress={handleSubmit}
-      >
-        <Text style={s.submitButtonText}>Search AI trip ideas</Text>
-      </TouchableOpacity>
+        style={styles.submitButton}
+      />
 
       <Modal
         visible={activeDateField !== null}
@@ -321,35 +298,43 @@ export default function TripSearchForm({ onSubmit }: Props) {
         animationType="fade"
         onRequestClose={closeCalendar}
       >
-        <View style={s.modalOverlay}>
-          <View style={s.calendarCard}>
-            <View style={s.calendarHeader}>
-              <TouchableOpacity style={s.arrowButton} onPress={goToPreviousMonth}>
-                <Text style={s.arrowText}>‹</Text>
+        <View style={styles.modalOverlay}>
+          <View style={styles.calendarCard}>
+            <View style={styles.calendarHeader}>
+              <TouchableOpacity
+                style={styles.arrowButton}
+                activeOpacity={0.8}
+                onPress={goToPreviousMonth}
+              >
+                <ChevronLeft color={colors.slate700} size={22} strokeWidth={2.6} />
               </TouchableOpacity>
 
-              <Text style={s.monthTitle}>
+              <Text style={styles.monthTitle}>
                 {MONTH_NAMES[displayedMonth.getMonth()]}{" "}
                 {displayedMonth.getFullYear()}
               </Text>
 
-              <TouchableOpacity style={s.arrowButton} onPress={goToNextMonth}>
-                <Text style={s.arrowText}>›</Text>
+              <TouchableOpacity
+                style={styles.arrowButton}
+                activeOpacity={0.8}
+                onPress={goToNextMonth}
+              >
+                <ChevronRight color={colors.slate700} size={22} strokeWidth={2.6} />
               </TouchableOpacity>
             </View>
 
-            <View style={s.weekRow}>
+            <View style={styles.weekRow}>
               {WEEK_DAYS.map((day) => (
-                <Text key={day} style={s.weekDay}>
+                <Text key={day} style={styles.weekDay}>
                   {day}
                 </Text>
               ))}
             </View>
 
-            <View style={s.daysGrid}>
+            <View style={styles.daysGrid}>
               {calendarDays.map((day, index) => {
                 if (day === null) {
-                  return <View key={`empty-${index}`} style={s.dayCell} />;
+                  return <View key={`empty-${index}`} style={styles.dayCell} />;
                 }
 
                 const currentDate = new Date(
@@ -365,18 +350,18 @@ export default function TripSearchForm({ onSubmit }: Props) {
                   <TouchableOpacity
                     key={`${displayedMonth.getMonth()}-${day}`}
                     style={[
-                      s.dayCell,
-                      isSelected ? s.selectedDayCell : null,
-                      isToday && !isSelected ? s.todayDayCell : null,
+                      styles.dayCell,
+                      isSelected ? styles.selectedDayCell : null,
+                      isToday && !isSelected ? styles.todayDayCell : null,
                     ]}
-                    activeOpacity={0.75}
+                    activeOpacity={0.8}
                     onPress={() => chooseDay(day)}
                   >
                     <Text
                       style={[
-                        s.dayText,
-                        isSelected ? s.selectedDayText : null,
-                        isToday && !isSelected ? s.todayDayText : null,
+                        styles.dayText,
+                        isSelected ? styles.selectedDayText : null,
+                        isToday && !isSelected ? styles.todayDayText : null,
                       ]}
                     >
                       {day}
@@ -386,217 +371,178 @@ export default function TripSearchForm({ onSubmit }: Props) {
               })}
             </View>
 
-            <Text style={s.selectedDateText}>
+            <Text style={styles.selectedDateText}>
               Selected date: {formatDate(selectedDate)}
             </Text>
 
-            <View style={s.modalButtons}>
-              <TouchableOpacity style={s.cancelButton} onPress={closeCalendar}>
-                <Text style={s.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={s.confirmButton} onPress={confirmDate}>
-                <Text style={s.confirmButtonText}>Confirm</Text>
-              </TouchableOpacity>
+            <View style={styles.modalButtons}>
+              <PrimaryButton
+                title="Cancel"
+                variant="secondary"
+                onPress={closeCalendar}
+                style={styles.modalButton}
+              />
+              <PrimaryButton
+                title="Confirm"
+                onPress={confirmDate}
+                style={styles.modalButton}
+              />
             </View>
           </View>
         </View>
       </Modal>
-    </View>
+    </AppCard>
   );
 }
 
-const s = StyleSheet.create({
+const styles = StyleSheet.create({
   card: {
-    backgroundColor: C.slate50,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-  },
-  title: {
-    color: C.slate900,
-    fontSize: 20,
-    fontWeight: "800",
-    marginBottom: 4,
-  },
-  subtitle: {
-    color: C.slate500,
-    fontSize: 14,
-    fontWeight: "500",
-    lineHeight: 20,
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   field: {
-    marginBottom: 16,
+    marginBottom: spacing.lg,
+  },
+  fieldRow: {
+    flexDirection: "row",
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  splitField: {
+    flex: 1,
+  },
+  dateField: {
+    flex: 1,
   },
   label: {
-    color: C.slate400,
-    fontSize: 12,
+    color: colors.slate500,
+    fontSize: 11,
     fontWeight: "700",
-    letterSpacing: 1,
-    textTransform: "uppercase",
+    letterSpacing: 1.2,
     marginBottom: 8,
-  },
-  input: {
-    backgroundColor: C.white,
-    borderWidth: 1,
-    borderColor: C.slate200,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    color: C.slate900,
-    fontSize: 16,
-    fontWeight: "500",
+    textTransform: "uppercase",
   },
   dateButton: {
-    backgroundColor: C.white,
-    borderWidth: 1,
-    borderColor: C.slate200,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    alignItems: "center",
+    backgroundColor: colors.white,
+    borderColor: colors.slate200,
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    flexDirection: "row",
+    gap: spacing.sm,
+    minHeight: 50,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
   },
   dateButtonText: {
-    color: C.slate900,
-    fontSize: 16,
-    fontWeight: "600",
+    color: colors.slate900,
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "700",
   },
   inputError: {
-    borderColor: C.red400,
+    borderColor: colors.redBorder,
   },
   errorText: {
-    color: C.red500,
+    color: colors.red500,
     fontSize: 12,
-    fontWeight: "500",
+    fontWeight: "600",
+    lineHeight: 18,
     marginTop: 6,
   },
   submitButton: {
-    backgroundColor: C.teal600,
-    borderRadius: 16,
-    paddingVertical: 16,
-    alignItems: "center",
-    marginTop: 4,
-  },
-  submitButtonText: {
-    color: C.white,
-    fontSize: 15,
-    fontWeight: "800",
-    letterSpacing: 0.3,
+    marginTop: spacing.xs,
+    minHeight: 56,
   },
   modalOverlay: {
-    flex: 1,
-    backgroundColor: C.blackTransparent,
     alignItems: "center",
+    backgroundColor: colors.overlay,
+    flex: 1,
     justifyContent: "center",
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.xl,
   },
   calendarCard: {
-    width: "100%",
-    maxWidth: 420,
-    backgroundColor: C.white,
+    backgroundColor: colors.white,
     borderRadius: 24,
-    padding: 20,
+    maxWidth: 420,
+    padding: spacing.xl,
+    width: "100%",
+    ...shadows.card,
   },
   calendarHeader: {
-    flexDirection: "row",
     alignItems: "center",
+    flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 16,
+    marginBottom: spacing.lg,
   },
   arrowButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: C.slate100,
     alignItems: "center",
+    backgroundColor: colors.slate100,
+    borderRadius: radius.lg,
+    height: 44,
     justifyContent: "center",
-  },
-  arrowText: {
-    color: C.slate900,
-    fontSize: 32,
-    fontWeight: "600",
-    marginTop: -2,
+    width: 44,
   },
   monthTitle: {
-    color: C.slate900,
+    color: colors.slate900,
+    flex: 1,
     fontSize: 18,
     fontWeight: "800",
+    textAlign: "center",
   },
   weekRow: {
     flexDirection: "row",
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   weekDay: {
-    width: `${100 / 7}%`,
-    textAlign: "center",
-    color: C.slate400,
+    color: colors.slate400,
     fontSize: 12,
     fontWeight: "800",
+    textAlign: "center",
+    width: `${100 / 7}%`,
   },
   daysGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
   },
   dayCell: {
-    width: `${100 / 7}%`,
-    height: 44,
     alignItems: "center",
+    borderRadius: radius.lg,
+    height: 42,
     justifyContent: "center",
-    borderRadius: 22,
-    marginBottom: 6,
+    marginBottom: spacing.xs,
+    width: `${100 / 7}%`,
   },
   selectedDayCell: {
-    backgroundColor: C.teal600,
+    backgroundColor: colors.teal600,
   },
   todayDayCell: {
-    backgroundColor: C.teal50,
+    backgroundColor: colors.teal50,
   },
   dayText: {
-    color: C.slate700,
+    color: colors.slate700,
     fontSize: 15,
     fontWeight: "700",
   },
   selectedDayText: {
-    color: C.white,
+    color: colors.white,
   },
   todayDayText: {
-    color: C.teal700,
+    color: colors.teal700,
   },
   selectedDateText: {
-    color: C.slate500,
+    color: colors.slate500,
     fontSize: 13,
     fontWeight: "600",
+    lineHeight: 18,
+    marginBottom: spacing.lg,
+    marginTop: spacing.sm,
     textAlign: "center",
-    marginTop: 8,
-    marginBottom: 16,
   },
   modalButtons: {
     flexDirection: "row",
+    gap: spacing.md,
   },
-  cancelButton: {
+  modalButton: {
     flex: 1,
-    backgroundColor: C.slate100,
-    borderRadius: 16,
-    paddingVertical: 16,
-    alignItems: "center",
-    marginRight: 6,
-  },
-  cancelButtonText: {
-    color: C.slate500,
-    fontSize: 14,
-    fontWeight: "800",
-  },
-  confirmButton: {
-    flex: 1,
-    backgroundColor: C.teal600,
-    borderRadius: 16,
-    paddingVertical: 16,
-    alignItems: "center",
-    marginLeft: 6,
-  },
-  confirmButtonText: {
-    color: C.white,
-    fontSize: 14,
-    fontWeight: "800",
   },
 });

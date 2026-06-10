@@ -1,45 +1,34 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  SafeAreaView,
   ActivityIndicator,
   Alert,
   ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { useAuth } from "../context/AuthContext";
-import TripSearchForm from "../components/TripSearchForm";
+import { SafeAreaView } from "react-native-safe-area-context";
 import {
-  BASE_URL,
-  listInterestCategories,
-  saveGeneratedTrip,
-} from "../services/api";
-import { allRulesMet, checkPassword } from "../utils/validation";
+  AlertCircle,
+  BookOpen,
+  CheckCircle2,
+  Compass,
+  Heart,
+  Save,
+  Sparkles,
+  UserRound,
+  WalletCards,
+} from "lucide-react-native";
 
-// ─── Design tokens ────────────────────────────────────────────────────────────
-
-const C = {
-  teal700: "#0f766e",
-  teal600: "#0d9488",
-  teal200: "#99f6e4",
-  teal100: "#ccfbf1",
-  teal50: "#f0fdfa",
-  slate900: "#0f172a",
-  slate500: "#64748b",
-  slate400: "#94a3b8",
-  slate200: "#e2e8f0",
-  slate100: "#f1f5f9",
-  slate50: "#f8fafc",
-  white: "#ffffff",
-  red500: "#ef4444",
-  red100: "#fee2e2",
-  red900: "#7f1d1d",
-  red800: "#991b1b",
-  slate700: "#334155",
-};
+import AppCard from "../components/AppCard";
+import ItineraryTimeline from "../components/ItineraryTimeline";
+import PrimaryButton from "../components/PrimaryButton";
+import SectionHeader from "../components/SectionHeader";
+import TripSearchForm from "../components/TripSearchForm";
+import { useAuth } from "../context/AuthContext";
+import { BASE_URL, saveGeneratedTrip } from "../services/api";
+import { colors, radius, shadows, spacing } from "../theme/designSystem";
 
 type TripSearchData = {
   destination: string;
@@ -70,18 +59,11 @@ type BackendErrorResponse = {
   detail?: unknown;
 };
 
-type InterestCategoryOption = {
-  value: string;
-  description: string;
-};
-
 type Props = {
   navigation: {
     navigate: (screen: string) => void;
   };
 };
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function parseLocalDate(value: string) {
   const [year, month, day] = value.split("-").map(Number);
@@ -102,13 +84,6 @@ function getErrorMessage(error: unknown) {
   }
 
   return "Something went wrong.";
-}
-
-function formatInterestLabel(value: string) {
-  return value
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
 }
 
 function formatBackendDetail(detail: unknown) {
@@ -140,191 +115,16 @@ function formatBackendDetail(detail: unknown) {
   return null;
 }
 
-// ─── Screen ───────────────────────────────────────────────────────────────────
-
 export default function HomeScreen({ navigation }: Props) {
-  const {
-    user,
-    token,
-    logout,
-    isLoading,
-    changeUserPassword,
-    updateUserInterests,
-    updateUserProfile,
-  } = useAuth();
+  const { user, token, isLoading } = useAuth();
 
   const [isGeneratingTrip, setIsGeneratingTrip] = useState(false);
   const [isSavingTrip, setIsSavingTrip] = useState(false);
-  const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [isLoadingInterests, setIsLoadingInterests] = useState(false);
-  const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [savedTripId, setSavedTripId] = useState<number | null>(null);
-  const [profileName, setProfileName] = useState("");
-  const [profileEmail, setProfileEmail] = useState("");
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [interestOptions, setInterestOptions] = useState<
-    InterestCategoryOption[]
-  >([]);
-  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [itineraryResult, setItineraryResult] = useState<ItineraryResult | null>(
     null
   );
   const [tripError, setTripError] = useState<string | null>(null);
-  const [profileError, setProfileError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!isEditingProfile) {
-      setProfileName(user?.name ?? "");
-      setProfileEmail(user?.email ?? "");
-      setSelectedInterests(user?.interests ?? []);
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-    }
-  }, [isEditingProfile, user]);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const loadInterestOptions = async () => {
-      try {
-        setIsLoadingInterests(true);
-        setProfileError(null);
-
-        const data = await listInterestCategories();
-        if (!isMounted) {
-          return;
-        }
-
-        setInterestOptions(
-          data.categories.map((category) => ({
-            value: category,
-            description:
-              data.descriptions[category] ?? formatInterestLabel(category),
-          }))
-        );
-      } catch (error) {
-        if (isMounted) {
-          setProfileError(getErrorMessage(error));
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoadingInterests(false);
-        }
-      }
-    };
-
-    loadInterestOptions();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  const handleLogout = async () => {
-    await logout();
-  };
-
-  const handleEditProfile = () => {
-    setProfileName(user?.name ?? "");
-    setProfileEmail(user?.email ?? "");
-    setSelectedInterests(user?.interests ?? []);
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
-    if (interestOptions.length > 0) {
-      setProfileError(null);
-    }
-    setIsEditingProfile(true);
-  };
-
-  const handleCancelProfileEdit = () => {
-    setProfileName(user?.name ?? "");
-    setProfileEmail(user?.email ?? "");
-    setSelectedInterests(user?.interests ?? []);
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
-    setProfileError(null);
-    setIsEditingProfile(false);
-  };
-
-  const toggleInterest = (interest: string) => {
-    setSelectedInterests((current) =>
-      current.includes(interest)
-        ? current.filter((item) => item !== interest)
-        : [...current, interest]
-    );
-  };
-
-  const handleSaveProfile = async () => {
-    const cleanedName = profileName.trim();
-    const cleanedEmail = profileEmail.trim();
-    const wantsPasswordChange =
-      currentPassword.length > 0 ||
-      newPassword.length > 0 ||
-      confirmPassword.length > 0;
-
-    if (!cleanedName) {
-      const message = "Name cannot be empty.";
-      setProfileError(message);
-      Alert.alert("Check profile details", message);
-      return;
-    }
-
-    if (!cleanedEmail || !cleanedEmail.includes("@")) {
-      const message = "Enter a valid email address.";
-      setProfileError(message);
-      Alert.alert("Check profile details", message);
-      return;
-    }
-
-    if (wantsPasswordChange) {
-      if (!currentPassword || !newPassword || !confirmPassword) {
-        const message = "Fill all password fields to change your password.";
-        setProfileError(message);
-        Alert.alert("Check password details", message);
-        return;
-      }
-
-      if (newPassword !== confirmPassword) {
-        const message = "New password and confirmation do not match.";
-        setProfileError(message);
-        Alert.alert("Check password details", message);
-        return;
-      }
-
-      if (!allRulesMet(checkPassword(newPassword))) {
-        const message =
-          "New password must have at least 8 characters, uppercase, lowercase, and a number.";
-        setProfileError(message);
-        Alert.alert("Check password details", message);
-        return;
-      }
-    }
-
-    try {
-      setIsSavingProfile(true);
-      setProfileError(null);
-      await updateUserProfile(cleanedName, cleanedEmail);
-      await updateUserInterests(selectedInterests);
-
-      if (wantsPasswordChange) {
-        await changeUserPassword(currentPassword, newPassword);
-      }
-
-      setIsEditingProfile(false);
-      Alert.alert("Profile updated", "Your account details were saved.");
-    } catch (error) {
-      const message = getErrorMessage(error);
-      setProfileError(message);
-      Alert.alert("Could not update profile", message);
-    } finally {
-      setIsSavingProfile(false);
-    }
-  };
 
   const handleTripSearch = async (tripData: TripSearchData) => {
     if (!token) {
@@ -434,755 +234,333 @@ export default function HomeScreen({ navigation }: Props) {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={s.root}>
-        <View style={s.loadingContainer}>
-          <ActivityIndicator size="large" color={C.white} />
-          <Text style={s.loadingText}>Loading...</Text>
+      <SafeAreaView style={styles.root}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.white} />
+          <Text style={styles.loadingText}>Loading...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={s.root}>
-      <ScrollView contentContainerStyle={s.scrollContent}>
-        {/* ── Header ── */}
-        <View style={s.header}>
-          <View style={s.iconBadge}>
-            <Text style={{ fontSize: 36 }}>✈️</Text>
-          </View>
-          <View style={s.headerContent}>
-            <Text style={s.greeting}>Welcome back,</Text>
-            <Text style={s.userName}>{user?.name || "Traveler"}</Text>
-          </View>
-          <TouchableOpacity
-            style={s.libraryButton}
-            activeOpacity={0.8}
-            onPress={() => navigation.navigate("Library")}
-          >
-            <Text style={s.libraryButtonText}>Library</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* ── User Info Card ── */}
-        <View style={s.card}>
-          <View style={s.cardHeader}>
-            <Text style={[s.cardTitle, s.cardTitleInline]}>
-              Account Details
-            </Text>
-            {isEditingProfile ? (
-              <TouchableOpacity
-                style={s.editProfileButton}
-                activeOpacity={0.8}
-                onPress={handleCancelProfileEdit}
-              >
-                <Text style={s.editProfileButtonText}>Cancel</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={s.editProfileButton}
-                activeOpacity={0.8}
-                onPress={handleEditProfile}
-              >
-                <Text style={s.editProfileButtonText}>Edit Profile</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {isEditingProfile ? (
-            <View style={s.profileForm}>
-              <View style={s.profileField}>
-                <Text style={s.infoLabel}>Name</Text>
-                <TextInput
-                  style={s.profileInput}
-                  value={profileName}
-                  onChangeText={setProfileName}
-                  placeholder="Your name"
-                  placeholderTextColor={C.slate400}
-                  autoCapitalize="words"
-                />
-              </View>
-
-              <View style={s.profileField}>
-                <Text style={s.infoLabel}>Email</Text>
-                <TextInput
-                  style={s.profileInput}
-                  value={profileEmail}
-                  onChangeText={setProfileEmail}
-                  placeholder="you@example.com"
-                  placeholderTextColor={C.slate400}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </View>
-
-              <View style={s.passwordSection}>
-                <Text style={s.infoLabel}>Change Password</Text>
-                <Text style={s.passwordHint}>
-                  Leave these fields empty to keep your current password.
-                </Text>
-
-                <TextInput
-                  style={s.profileInput}
-                  value={currentPassword}
-                  onChangeText={setCurrentPassword}
-                  placeholder="Current password"
-                  placeholderTextColor={C.slate400}
-                  secureTextEntry
-                  autoCapitalize="none"
-                />
-
-                <TextInput
-                  style={s.profileInput}
-                  value={newPassword}
-                  onChangeText={setNewPassword}
-                  placeholder="New password"
-                  placeholderTextColor={C.slate400}
-                  secureTextEntry
-                  autoCapitalize="none"
-                />
-
-                <TextInput
-                  style={s.profileInput}
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  placeholder="Confirm new password"
-                  placeholderTextColor={C.slate400}
-                  secureTextEntry
-                  autoCapitalize="none"
-                />
-              </View>
-            </View>
-          ) : (
-            <>
-              <View style={s.infoRow}>
-                <Text style={s.infoLabel}>Name</Text>
-                <Text style={s.infoValue}>{user?.name}</Text>
-              </View>
-
-              <View style={s.divider} />
-
-              <View style={s.infoRow}>
-                <Text style={s.infoLabel}>Email</Text>
-                <Text style={s.infoValue}>{user?.email}</Text>
-              </View>
-            </>
-          )}
-
-          <View style={s.divider} />
-
-          <View style={s.infoRow}>
-            <Text style={s.infoLabel}>User ID</Text>
-            <Text style={[s.infoValue, s.infoValueMuted]}>{user?.id}</Text>
-          </View>
-
-          <View style={s.divider} />
-
-          <View style={s.profileSection}>
-            <View style={s.profileSectionHeader}>
-              <Text style={s.infoLabel}>Travel Interests</Text>
-              {isLoadingInterests ? (
-                <ActivityIndicator size="small" color={C.teal600} />
-              ) : null}
+    <SafeAreaView style={styles.root}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.hero}>
+          <View style={styles.heroTopRow}>
+            <View style={styles.iconBadge}>
+              <Compass color={colors.white} size={30} strokeWidth={2.2} />
             </View>
 
-            {profileError ? (
-              <Text style={s.profileErrorText}>{profileError}</Text>
-            ) : null}
+            <View style={styles.headerActions}>
+              <TouchableOpacity
+                style={styles.headerButton}
+                activeOpacity={0.8}
+                onPress={() => navigation.navigate("Library")}
+              >
+                <BookOpen color={colors.white} size={17} strokeWidth={2.3} />
+                <Text style={styles.headerButtonText}>Library</Text>
+              </TouchableOpacity>
 
-            {isEditingProfile ? (
-              <>
-                <View style={s.interestsGrid}>
-                  {interestOptions.length > 0 ? (
-                    interestOptions.map((interest) => {
-                      const isSelected = selectedInterests.includes(
-                        interest.value
-                      );
+              <TouchableOpacity
+                style={[styles.headerButton, styles.profileButton]}
+                activeOpacity={0.8}
+                onPress={() => navigation.navigate("Profile")}
+              >
+                <UserRound color={colors.white} size={17} strokeWidth={2.3} />
+                <Text style={styles.headerButtonText}>Profile</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
 
-                      return (
-                        <TouchableOpacity
-                          key={interest.value}
-                          style={[
-                            s.interestChip,
-                            isSelected ? s.interestChipSelected : null,
-                          ]}
-                          accessibilityLabel={interest.description}
-                          activeOpacity={0.8}
-                          disabled={isSavingProfile}
-                          onPress={() => toggleInterest(interest.value)}
-                        >
-                          <Text
-                            style={[
-                              s.interestChipText,
-                              isSelected ? s.interestChipTextSelected : null,
-                            ]}
-                          >
-                            {formatInterestLabel(interest.value)}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })
-                  ) : (
-                    <Text style={s.emptyInterestsText}>
-                      No interest categories available.
-                    </Text>
-                  )}
-                </View>
+          <Text style={styles.heroKicker}>Trip planner</Text>
+          <Text style={styles.heroTitle}>
+            Where to next,{"\n"}
+            {user?.name || "Traveler"}?
+          </Text>
+          <Text style={styles.heroSub}>
+            Generate an itinerary, review the timeline, and save the trip when
+            it feels right.
+          </Text>
 
-                <View style={s.profileActions}>
-                  <TouchableOpacity
-                    style={s.profileSecondaryButton}
-                    activeOpacity={0.8}
-                    disabled={isSavingProfile}
-                    onPress={handleCancelProfileEdit}
-                  >
-                    <Text style={s.profileSecondaryButtonText}>Cancel</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      s.profileSaveButton,
-                      isSavingProfile ? s.profileButtonDisabled : null,
-                    ]}
-                    activeOpacity={0.8}
-                    disabled={isSavingProfile}
-                    onPress={handleSaveProfile}
-                  >
-                    <Text style={s.profileSaveButtonText}>
-                      {isSavingProfile ? "Saving..." : "Save"}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </>
-            ) : (
-              <View style={s.interestsGrid}>
-                {user?.interests.length ? (
-                  user.interests.map((interest) => (
-                    <View
-                      key={interest}
-                      style={[s.interestChip, s.interestChipSelected]}
-                    >
-                      <Text style={s.interestChipTextSelected}>
-                        {formatInterestLabel(interest)}
-                      </Text>
-                    </View>
-                  ))
-                ) : (
-                  <Text style={s.emptyInterestsText}>
-                    No interests selected.
-                  </Text>
-                )}
-              </View>
-            )}
+          <View style={styles.statRow}>
+            <View style={[styles.stat, styles.statTeal]}>
+              <Sparkles color={colors.teal700} size={18} strokeWidth={2.2} />
+              <Text style={styles.statLabelDark}>AI planner</Text>
+            </View>
+            <View style={[styles.stat, styles.statSky]}>
+              <WalletCards color={colors.sky600} size={18} strokeWidth={2.2} />
+              <Text style={styles.statLabelDark}>Budget-aware</Text>
+            </View>
+            <View style={[styles.stat, styles.statAmber]}>
+              <Heart color={colors.amber600} size={18} strokeWidth={2.2} />
+              <Text style={styles.statLabelDark}>
+                {user?.interests.length || 0} interests
+              </Text>
+            </View>
           </View>
         </View>
 
-        {/* ── Trip Search Form ── */}
-        <View style={s.sectionSpacing}>
+        <View style={styles.contentSheet}>
           <TripSearchForm onSubmit={handleTripSearch} />
-        </View>
 
-        {/* ── Loading Result ── */}
-        {isGeneratingTrip ? (
-          <View style={s.resultCard}>
-            <ActivityIndicator size="large" color={C.teal600} />
-            <Text style={s.resultLoadingText}>Generating itinerary...</Text>
-          </View>
-        ) : null}
-
-        {/* ── Error Result ── */}
-        {tripError ? (
-          <View style={s.errorCard}>
-            <Text style={s.errorTitle}>Trip generation failed</Text>
-            <Text style={s.errorMessage}>{tripError}</Text>
-          </View>
-        ) : null}
-
-        {/* ── AI Result ── */}
-        {itineraryResult ? (
-          <View style={s.resultCard}>
-            <View style={s.resultHeader}>
-              <Text style={[s.cardTitle, s.resultTitle]}>
-                AI Itinerary for {itineraryResult.destination || "your trip"}
+          {isGeneratingTrip ? (
+            <AppCard elevated style={styles.feedbackCard}>
+              <ActivityIndicator size="large" color={colors.teal600} />
+              <Text style={styles.feedbackTitle}>Generating itinerary...</Text>
+              <Text style={styles.feedbackText}>
+                The planner is building your daily schedule.
               </Text>
-              <TouchableOpacity
-                style={[
-                  s.saveTripButton,
-                  (isSavingTrip || !!savedTripId) && s.saveTripButtonDisabled,
-                ]}
-                activeOpacity={0.8}
-                disabled={isSavingTrip || !!savedTripId}
-                onPress={handleSaveGeneratedTrip}
-              >
-                <Text
-                  style={[
-                    s.saveTripButtonText,
-                    (isSavingTrip || !!savedTripId) &&
-                      s.saveTripButtonTextDisabled,
-                  ]}
-                >
-                  {savedTripId ? "Saved" : isSavingTrip ? "Saving..." : "Save"}
-                </Text>
-              </TouchableOpacity>
+            </AppCard>
+          ) : null}
+
+          {tripError ? (
+            <View style={styles.errorCard}>
+              <AlertCircle color={colors.red700} size={22} strokeWidth={2.4} />
+              <View style={styles.errorCopy}>
+                <Text style={styles.errorTitle}>Trip generation failed</Text>
+                <Text style={styles.errorMessage}>{tripError}</Text>
+              </View>
             </View>
+          ) : null}
 
-            {itineraryResult.days && itineraryResult.days.length > 0 ? (
-              itineraryResult.days.map((day, index) => (
-                <View key={index} style={s.dayResult}>
-                  <Text style={s.dayTitle}>
-                    Day {day.day_number || index + 1}
-                  </Text>
+          {itineraryResult ? (
+            <AppCard elevated style={styles.sectionCard}>
+              <SectionHeader
+                eyebrow="Generated itinerary"
+                title={`AI itinerary for ${
+                  itineraryResult.destination || "your trip"
+                }`}
+                action={
+                  <PrimaryButton
+                    title={savedTripId ? "Saved" : "Save"}
+                    loading={isSavingTrip}
+                    disabled={isSavingTrip || !!savedTripId}
+                    fullWidth={false}
+                    icon={
+                      savedTripId ? (
+                        <CheckCircle2
+                          color={colors.white}
+                          size={16}
+                          strokeWidth={2.4}
+                        />
+                      ) : (
+                        <Save
+                          color={colors.white}
+                          size={16}
+                          strokeWidth={2.4}
+                        />
+                      )
+                    }
+                    onPress={handleSaveGeneratedTrip}
+                    style={styles.saveTripButton}
+                  />
+                }
+              />
 
-                  {day.activities && day.activities.length > 0 ? (
-                    day.activities.map((activity, activityIndex) => (
-                      <View key={activityIndex} style={s.activityBox}>
-                        <Text style={s.activityTitle}>
-                          {activity.time_slot ? `${activity.time_slot} - ` : ""}
-                          {activity.title || "Activity"}
-                        </Text>
-
-                        {activity.description ? (
-                          <Text style={s.resultText}>
-                            {activity.description}
-                          </Text>
-                        ) : null}
-                      </View>
-                    ))
-                  ) : (
-                    <Text style={s.resultText}>No activities found.</Text>
-                  )}
-                </View>
-              ))
-            ) : (
-              <Text style={s.resultText}>
-                {JSON.stringify(itineraryResult, null, 2)}
-              </Text>
-            )}
-          </View>
-        ) : null}
-
-        {/* ── Features Placeholder ── */}
-        <View style={s.featuresCard}>
-          <Text style={s.cardTitle}>Features</Text>
-          <View style={s.featureItem}>
-            <Text style={s.featureIcon}>🗺️</Text>
-            <Text style={s.featureText}>Plan your perfect trip</Text>
-          </View>
-          <View style={s.featureItem}>
-            <Text style={s.featureIcon}>🤖</Text>
-            <Text style={s.featureText}>AI-powered recommendations</Text>
-          </View>
-          <View style={s.featureItem}>
-            <Text style={s.featureIcon}>📍</Text>
-            <Text style={s.featureText}>Discover hidden gems</Text>
-          </View>
+              {itineraryResult.days && itineraryResult.days.length > 0 ? (
+                <ItineraryTimeline days={itineraryResult.days} />
+              ) : (
+                <Text style={styles.resultText}>
+                  {JSON.stringify(itineraryResult, null, 2)}
+                </Text>
+              )}
+            </AppCard>
+          ) : null}
         </View>
-
-        {/* ── Logout Button ── */}
-        <TouchableOpacity
-          style={s.logoutButton}
-          onPress={handleLogout}
-          activeOpacity={0.8}
-        >
-          <Text style={s.logoutButtonText}>Sign Out</Text>
-        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
-const s = StyleSheet.create({
+const styles = StyleSheet.create({
   root: {
+    backgroundColor: colors.teal700,
     flex: 1,
-    backgroundColor: C.teal700,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    paddingBottom: 40,
-  },
-  sectionSpacing: {
-    marginBottom: 16,
+    paddingBottom: 0,
   },
   loadingContainer: {
+    alignItems: "center",
     flex: 1,
     justifyContent: "center",
-    alignItems: "center",
   },
   loadingText: {
-    marginTop: 16,
-    color: C.white,
+    color: colors.white,
     fontSize: 14,
     fontWeight: "600",
+    marginTop: spacing.lg,
   },
-
-  // Header
-  header: {
-    flexDirection: "row",
+  hero: {
+    backgroundColor: colors.teal700,
+    paddingBottom: 60,
+    paddingHorizontal: 24,
+    paddingTop: 28,
+  },
+  heroTopRow: {
     alignItems: "center",
-    marginBottom: 32,
-    gap: 16,
+    flexDirection: "row",
+    gap: spacing.md,
+    justifyContent: "space-between",
+    marginBottom: spacing.xxl,
   },
   iconBadge: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.3)",
     alignItems: "center",
-    justifyContent: "center",
-  },
-  headerContent: {
-    flex: 1,
-  },
-  libraryButton: {
-    minWidth: 82,
-    height: 40,
-    borderRadius: 12,
     backgroundColor: "rgba(255,255,255,0.18)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.28)",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 12,
-  },
-  libraryButtonText: {
-    color: C.white,
-    fontSize: 13,
-    fontWeight: "800",
-  },
-  greeting: {
-    color: C.teal100,
-    fontSize: 14,
-    fontWeight: "500",
-  },
-  userName: {
-    color: C.white,
-    fontSize: 24,
-    fontWeight: "800",
-    marginTop: 4,
-  },
-
-  // Card
-  card: {
-    backgroundColor: C.slate50,
+    borderColor: "rgba(255,255,255,0.25)",
     borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-  },
-  cardTitle: {
-    color: C.slate900,
-    fontSize: 16,
-    fontWeight: "700",
-    marginBottom: 16,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 16,
-  },
-  cardTitleInline: {
-    flex: 1,
-    marginBottom: 0,
-  },
-  editProfileButton: {
-    minWidth: 104,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: C.teal50,
     borderWidth: 1,
-    borderColor: C.teal200,
-    alignItems: "center",
+    height: 56,
     justifyContent: "center",
-    paddingHorizontal: 12,
+    width: 56,
   },
-  editProfileButtonText: {
-    color: C.teal700,
-    fontSize: 13,
-    fontWeight: "800",
-  },
-  infoRow: {
+  headerActions: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    flexShrink: 1,
+    gap: spacing.sm,
+  },
+  headerButton: {
     alignItems: "center",
-    paddingVertical: 12,
-  },
-  infoLabel: {
-    color: C.slate500,
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  infoValue: {
-    color: C.slate900,
-    fontSize: 14,
-    fontWeight: "600",
-    flex: 1,
-    textAlign: "right",
-  },
-  infoValueMuted: {
-    color: C.slate400,
-    fontSize: 12,
-    fontFamily: "monospace",
-  },
-  divider: {
-    height: 1,
-    backgroundColor: C.slate200,
-  },
-  profileForm: {
-    gap: 14,
-    paddingBottom: 16,
-  },
-  profileField: {
-    gap: 8,
-  },
-  profileInput: {
-    width: "100%",
-    minHeight: 48,
-    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    borderColor: "rgba(255,255,255,0.25)",
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: C.slate200,
-    backgroundColor: C.white,
-    color: C.slate900,
-    fontSize: 15,
-    fontWeight: "600",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  passwordSection: {
-    gap: 8,
-    borderRadius: 14,
-    backgroundColor: C.white,
-    borderWidth: 1,
-    borderColor: C.slate200,
-    padding: 14,
-  },
-  passwordHint: {
-    color: C.slate500,
-    fontSize: 12,
-    fontWeight: "600",
-    lineHeight: 18,
-  },
-  profileSection: {
-    paddingTop: 16,
-  },
-  profileSectionHeader: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
+    gap: spacing.xs,
+    minHeight: 42,
+    paddingHorizontal: spacing.md,
   },
-  profileErrorText: {
-    color: C.red500,
-    fontSize: 12,
-    fontWeight: "600",
-    lineHeight: 18,
-    marginBottom: 12,
+  profileButton: {
+    backgroundColor: "rgba(255,255,255,0.22)",
   },
-  interestsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  interestChip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: C.slate200,
-    backgroundColor: C.white,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  interestChipSelected: {
-    borderColor: C.teal600,
-    backgroundColor: C.teal50,
-  },
-  interestChipText: {
-    color: C.slate700,
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  interestChipTextSelected: {
-    color: C.teal700,
-    fontSize: 12,
-    fontWeight: "800",
-  },
-  emptyInterestsText: {
-    color: C.slate500,
-    fontSize: 13,
-    fontWeight: "600",
-    lineHeight: 19,
-  },
-  profileActions: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 16,
-  },
-  profileSecondaryButton: {
-    flex: 1,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: C.slate100,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  profileSecondaryButtonText: {
-    color: C.slate500,
+  headerButtonText: {
+    color: colors.white,
     fontSize: 13,
     fontWeight: "800",
   },
-  profileSaveButton: {
-    flex: 1,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: C.teal600,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  profileButtonDisabled: {
-    backgroundColor: C.slate200,
-  },
-  profileSaveButtonText: {
-    color: C.white,
-    fontSize: 13,
+  heroKicker: {
+    color: colors.teal100,
+    fontSize: 11,
     fontWeight: "800",
+    letterSpacing: 1.2,
+    marginBottom: spacing.sm,
+    textTransform: "uppercase",
   },
-
-  // Result Card
-  resultCard: {
-    backgroundColor: C.slate50,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-  },
-  resultHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-    marginBottom: 16,
-  },
-  resultTitle: {
-    flex: 1,
-    marginBottom: 0,
-  },
-  saveTripButton: {
-    minWidth: 74,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: C.teal600,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 12,
-  },
-  saveTripButtonDisabled: {
-    backgroundColor: C.slate200,
-  },
-  saveTripButtonText: {
-    color: C.white,
-    fontSize: 13,
+  heroTitle: {
+    color: colors.white,
+    fontSize: 36,
     fontWeight: "800",
+    lineHeight: 42,
+    marginBottom: spacing.md,
   },
-  saveTripButtonTextDisabled: {
-    color: C.slate500,
-  },
-  resultLoadingText: {
-    color: C.slate700,
-    fontSize: 14,
-    fontWeight: "600",
-    textAlign: "center",
-    marginTop: 12,
-  },
-  dayResult: {
-    backgroundColor: C.white,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
-  },
-  dayTitle: {
-    color: C.teal700,
-    fontSize: 15,
-    fontWeight: "800",
-    marginBottom: 8,
-  },
-  activityBox: {
-    backgroundColor: C.slate50,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
-  },
-  activityTitle: {
-    color: C.slate900,
-    fontSize: 14,
-    fontWeight: "800",
-    marginBottom: 4,
-  },
-  resultText: {
-    color: C.slate700,
+  heroSub: {
+    color: colors.teal200,
     fontSize: 14,
     fontWeight: "500",
     lineHeight: 20,
-    marginBottom: 4,
+    marginBottom: spacing.xxl,
   },
-
-  // Error Card
-  errorCard: {
-    backgroundColor: C.red100,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
+  statRow: {
+    flexDirection: "row",
+    gap: spacing.md,
   },
-  errorTitle: {
-    color: C.red800,
-    fontSize: 16,
+  stat: {
+    alignItems: "center",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flex: 1,
+    gap: 5,
+    minHeight: 62,
+    padding: spacing.md,
+  },
+  statTeal: {
+    backgroundColor: colors.teal50,
+    borderColor: colors.teal200,
+  },
+  statSky: {
+    backgroundColor: colors.sky50,
+    borderColor: "#bae6fd",
+  },
+  statAmber: {
+    backgroundColor: colors.amber50,
+    borderColor: "#fde68a",
+  },
+  statLabelDark: {
+    color: colors.slate700,
+    fontSize: 10,
     fontWeight: "800",
-    marginBottom: 8,
+    textAlign: "center",
   },
-  errorMessage: {
-    color: C.red900,
+  contentSheet: {
+    backgroundColor: colors.slate50,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
+    gap: spacing.lg,
+    marginTop: -28,
+    minHeight: 520,
+    paddingBottom: 42,
+    paddingHorizontal: 20,
+    paddingTop: 28,
+  },
+  sectionCard: {
+    marginBottom: 0,
+  },
+  feedbackCard: {
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  feedbackTitle: {
+    color: colors.slate900,
+    fontSize: 15,
+    fontWeight: "800",
+    marginTop: spacing.sm,
+  },
+  feedbackText: {
+    color: colors.slate500,
     fontSize: 13,
     fontWeight: "600",
     lineHeight: 19,
-    marginBottom: 4,
+    textAlign: "center",
   },
-
-  // Features Card
-  featuresCard: {
-    backgroundColor: C.slate50,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 32,
-  },
-  featureItem: {
+  errorCard: {
+    alignItems: "flex-start",
+    backgroundColor: colors.red50,
+    borderColor: colors.redBorder,
+    borderRadius: radius.card,
+    borderWidth: 1,
     flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingVertical: 12,
+    gap: spacing.md,
+    padding: spacing.xl,
+    ...shadows.soft,
   },
-  featureIcon: {
-    fontSize: 24,
-  },
-  featureText: {
-    color: C.slate700,
-    fontSize: 14,
-    fontWeight: "500",
+  errorCopy: {
     flex: 1,
   },
-
-  // Logout Button
-  logoutButton: {
-    backgroundColor: C.red500,
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: "center",
-    justifyContent: "center",
+  errorTitle: {
+    color: colors.red700,
+    fontSize: 16,
+    fontWeight: "800",
+    marginBottom: spacing.xs,
   },
-  logoutButtonText: {
-    color: C.white,
-    fontSize: 15,
-    fontWeight: "700",
-    letterSpacing: 0.4,
+  errorMessage: {
+    color: colors.red700,
+    fontSize: 13,
+    fontWeight: "600",
+    lineHeight: 19,
+  },
+  saveTripButton: {
+    minHeight: 40,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+  },
+  resultText: {
+    color: colors.slate700,
+    fontSize: 14,
+    fontWeight: "500",
+    lineHeight: 20,
   },
 });
