@@ -6,12 +6,15 @@ import {
   updateMyInterests,
   updateMyProfile,
 } from "../services/api";
+import type { UserRole } from "../services/api";
 
 export interface User {
   id: number;
   email: string;
   name: string;
   interests: string[];
+  role: UserRole;
+  is_active: boolean;
 }
 
 export interface AuthContextType {
@@ -59,6 +62,8 @@ type RawUserProfile = {
   email: unknown;
   name: unknown;
   interests?: unknown;
+  role?: unknown;
+  is_active?: unknown;
 };
 
 function normalizeUserProfile(profile: RawUserProfile): User {
@@ -73,6 +78,11 @@ function normalizeUserProfile(profile: RawUserProfile): User {
     email: String(profile.email ?? ""),
     name: String(profile.name ?? ""),
     interests,
+    role:
+      profile.role === "admin" || profile.role === "super_admin"
+        ? profile.role
+        : "user",
+    is_active: profile.is_active !== false,
   };
 }
 

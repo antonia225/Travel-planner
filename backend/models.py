@@ -1,5 +1,5 @@
 from enum import Enum
-from sqlalchemy import Column, Date, DateTime, Enum as SQLEnum, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import Boolean, Column, Date, DateTime, Enum as SQLEnum, ForeignKey, Integer, JSON, String, Text, inspect, text
 from sqlalchemy.orm import DeclarativeBase, relationship
 
 from database import DatabaseSingleton
@@ -30,6 +30,12 @@ class TripStatus(str, Enum):
     PAST = "past"
 
 
+class UserRole(str, Enum):
+    USER = "user"
+    ADMIN = "admin"
+    SUPER_ADMIN = "super_admin"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -38,6 +44,8 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     interests = Column(JSON, nullable=False, default=list)
+    role = Column(String, nullable=False, default=UserRole.USER.value)
+    is_active = Column(Boolean, nullable=False, default=True)
 
     interest_records = relationship("UserInterest", back_populates="user", cascade="all, delete-orphan")
     saved_trips = relationship("SavedTrip", back_populates="user", cascade="all, delete-orphan")
@@ -95,3 +103,26 @@ class SavedTrip(Base):
 def create_all_tables() -> None:
     engine = DatabaseSingleton().get_engine()
     Base.metadata.create_all(bind=engine)
+    _ensure_user_rbac_columns()
+
+
+def _ensure_user_rbac_columns() -> None:
+    engine = DatabaseSingleton().get_engine()
+    inspector = inspect(engine)
+    if not inspector.has_table("users"):
+        return
+
+    existing_columns = {column["name"] for column in inspector.get_columns("users")}
+    statements: list[str] = []
+
+    if "role" not in existing_columns:
+        statements.append("ALTER TABLE users ADD COLUMN role VARCHAR NOT NULL DEFAULT 'user'")
+    if "is_active" not in existing_columns:
+        statements.append("ALTER TABLE users ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT 1")
+
+    if not statements:
+        return
+
+    with engine.begin() as connection:
+        for statement in statements:
+            connection.execute(text(statement))

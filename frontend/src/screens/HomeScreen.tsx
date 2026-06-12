@@ -16,6 +16,7 @@ import {
   Compass,
   Heart,
   Save,
+  ShieldCheck,
   Sparkles,
   UserRound,
   WalletCards,
@@ -27,7 +28,7 @@ import PrimaryButton from "../components/PrimaryButton";
 import SectionHeader from "../components/SectionHeader";
 import TripSearchForm from "../components/TripSearchForm";
 import { useAuth } from "../context/AuthContext";
-import { BASE_URL, saveGeneratedTrip } from "../services/api";
+import { BASE_URL, canAccessAdmin, saveGeneratedTrip } from "../services/api";
 import { colors, radius, shadows, spacing } from "../theme/designSystem";
 
 type TripSearchData = {
@@ -256,6 +257,21 @@ export default function HomeScreen({ navigation }: Props) {
             </View>
 
             <View style={styles.headerActions}>
+              {canAccessAdmin(user) ? (
+                <TouchableOpacity
+                  style={styles.headerButton}
+                  activeOpacity={0.8}
+                  onPress={() => navigation.navigate("AdminDashboard")}
+                >
+                  <ShieldCheck
+                    color={colors.white}
+                    size={17}
+                    strokeWidth={2.3}
+                  />
+                  <Text style={styles.headerButtonText}>Admin</Text>
+                </TouchableOpacity>
+              ) : null}
+
               <TouchableOpacity
                 style={styles.headerButton}
                 activeOpacity={0.8}
@@ -420,8 +436,10 @@ const styles = StyleSheet.create({
   },
   headerActions: {
     flexDirection: "row",
+    flexWrap: "wrap",
     flexShrink: 1,
     gap: spacing.sm,
+    justifyContent: "flex-end",
   },
   headerButton: {
     alignItems: "center",

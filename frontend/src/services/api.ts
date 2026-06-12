@@ -73,7 +73,23 @@ export type UserProfile = {
   email: string;
   name: string;
   interests: string[];
+  role: UserRole;
+  is_active: boolean;
 };
+
+export type UserRole = "user" | "admin" | "super_admin";
+
+export type AdminUser = {
+  id: number;
+  email: string;
+  name: string;
+  role: UserRole;
+  is_active: boolean;
+};
+
+export function canAccessAdmin(user?: UserProfile | null): boolean {
+  return user?.role === "admin" || user?.role === "super_admin";
+}
 
 export type TripListResponse = {
   id: number;
@@ -334,6 +350,40 @@ export function deleteSavedTrip(token: string, tripId: number): Promise<void> {
     `/saved-trips/${tripId}`,
     {
       method: "DELETE",
+    },
+    token
+  );
+}
+
+export function listAdminUsers(token: string): Promise<AdminUser[]> {
+  return fetchJson<AdminUser[]>("/admin/users", {}, token);
+}
+
+export function updateAdminUserRole(
+  token: string,
+  userId: number,
+  role: UserRole
+): Promise<AdminUser> {
+  return fetchJson<AdminUser>(
+    `/admin/users/${userId}/role`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ role }),
+    },
+    token
+  );
+}
+
+export function updateAdminUserStatus(
+  token: string,
+  userId: number,
+  isActive: boolean
+): Promise<AdminUser> {
+  return fetchJson<AdminUser>(
+    `/admin/users/${userId}/status`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ is_active: isActive }),
     },
     token
   );

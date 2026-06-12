@@ -3,7 +3,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import User
+from models import User, UserRole
 from repositories.user_repository import UserRepository
 from services.auth_service import decode_access_token
 
@@ -30,5 +30,23 @@ def get_current_user(request: Request, token: str = Depends(oauth2_scheme), db: 
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is deactivated.",
+        )
+
     request.state.user = user
     return user
+
+
+def require_roles(allowed_roles: list[UserRole]):
+    def dependency(current_user: User = Depends(get_current_user)) -> User:
+        if current_user.role not in {role.value for role in allowed_roles}:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to access this resource.",
+            )
+        return current_user
+
+    return dependency
