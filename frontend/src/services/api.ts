@@ -102,6 +102,13 @@ export type AdminUser = {
   is_active: boolean;
 };
 
+export type AdminStats = {
+  total_requests: number;
+  active_requests: number;
+  p95_latency_ms: number;
+  error_count: number;
+};
+
 export function canAccessAdmin(user?: UserProfile | null): boolean {
   return user?.role === "admin" || user?.role === "super_admin";
 }
@@ -389,6 +396,16 @@ export function deleteSavedTrip(token: string, tripId: number): Promise<void> {
 
 export function listAdminUsers(token: string): Promise<AdminUser[]> {
   return fetchJson<AdminUser[]>("/admin/users", {}, token);
+}
+
+export function getAdminStats(adminToken?: string): Promise<AdminStats> {
+  const headers = adminToken
+    ? { "X-Admin-Token": adminToken }
+    : process.env.EXPO_PUBLIC_ADMIN_TOKEN
+    ? { "X-Admin-Token": process.env.EXPO_PUBLIC_ADMIN_TOKEN }
+    : {};
+
+  return fetchJson<AdminStats>("/admin/stats", { headers });
 }
 
 export function updateAdminUserRole(
