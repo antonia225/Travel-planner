@@ -5,11 +5,13 @@ import { StatusBar } from "expo-status-bar";
 import { ActivityIndicator, View } from "react-native";
 
 import { AuthProvider, useAuth } from "./src/context/AuthContext";
+import AdminDashboardScreen from "./src/screens/AdminDashboardScreen";
 import HomeScreen from "./src/screens/HomeScreen";
 import LibraryScreen from "./src/screens/LibraryScreen";
 import LoginScreen from "./src/screens/LoginScreen";
 import ProfileScreen from "./src/screens/ProfileScreen";
 import RegisterScreen from "./src/screens/RegisterScreen";
+import { canAccessAdmin } from "./src/services/api";
 
 const Stack = createNativeStackNavigator();
 
@@ -49,6 +51,8 @@ function AuthStack() {
 // ─── App Stack (Authenticated Routes) ─────────────────────────────────────────
 
 function AppStack() {
+  const { user } = useAuth();
+
   return (
     <Stack.Navigator
       screenOptions={{
@@ -58,6 +62,9 @@ function AppStack() {
       <Stack.Screen name="Home" component={HomeScreen} />
       <Stack.Screen name="Library" component={LibraryScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
+      {canAccessAdmin(user) ? (
+        <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
+      ) : null}
     </Stack.Navigator>
   );
 }

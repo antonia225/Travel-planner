@@ -4,6 +4,7 @@ from typing import Optional
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
+from models import UserRole
 from schemas.interests import InterestCategory
 
 
@@ -37,6 +38,8 @@ class RegisterResponse(BaseModel):
     id: int
     name: str
     email: EmailStr
+    role: UserRole = UserRole.USER
+    is_active: bool = True
 
 
 class LoginRequest(BaseModel):
@@ -77,3 +80,21 @@ class UserProfile(BaseModel):
     name: str
     email: EmailStr
     interests: list[str] = Field(default_factory=list)
+    role: UserRole = UserRole.USER
+    is_active: bool = True
+
+
+class AdminUserResponse(BaseModel):
+    id: int
+    name: str
+    email: EmailStr
+    role: UserRole
+    is_active: bool
+
+
+class AdminUserRoleUpdateRequest(BaseModel):
+    role: UserRole
+
+
+class AdminUserStatusUpdateRequest(BaseModel):
+    is_active: bool

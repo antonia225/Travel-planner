@@ -11,14 +11,17 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database import get_db
-from dependencies.auth import get_current_user
-from models import User, UserInterestCategory, create_all_tables
+from dependencies.auth import get_current_user, require_roles
+from models import User, UserInterestCategory, UserRole, create_all_tables
 from repositories.saved_trip_repository import SavedTripRepository
 from repositories.trip_repository import TripRepository
 from repositories.user_interest_repository import UserInterestRepository
 from repositories.user_repository import UserRepository
 from schemas.auth import (
     ChangePasswordRequest,
+    AdminUserResponse,
+    AdminUserRoleUpdateRequest,
+    AdminUserStatusUpdateRequest,
     LoginRequest,
     RegisterRequest,
     RegisterResponse,
@@ -148,7 +151,13 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> Registe
     if payload.interests:
         interest_repo.add_interests(user.id, payload.interests)
     
-    return RegisterResponse(id=user.id, email=user.email, name=user.name)
+    return RegisterResponse(
+        id=user.id,
+        email=user.email,
+        name=user.name,
+        role=UserRole(user.role),
+        is_active=user.is_active,
+    )
 
 
 @app.post("/login", response_model=TokenResponse)
@@ -163,11 +172,17 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is deactivated.",
+        )
+
     access_token = create_access_token(
         data={
             "sub": str(user.id),
             "email": user.email,
-            "role": "user",
+            "role": user.role,
         }
     )
     return TokenResponse(access_token=access_token)
@@ -180,6 +195,8 @@ def read_current_user(current_user: User = Depends(get_current_user)) -> UserPro
         name=current_user.name,
         email=current_user.email,
         interests=current_user.interests or [],
+        role=UserRole(current_user.role),
+        is_active=current_user.is_active,
     )
 
 
@@ -216,6 +233,8 @@ def update_current_user_profile(
         name=updated_user.name,
         email=updated_user.email,
         interests=updated_user.interests or [],
+        role=UserRole(updated_user.role),
+        is_active=updated_user.is_active,
     )
 
 
@@ -265,7 +284,77 @@ def update_user_interests(
         name=updated_user.name,
         email=updated_user.email,
         interests=updated_user.interests or [],
+        role=UserRole(updated_user.role),
+        is_active=updated_user.is_active,
     )
+
+
+# ---------- Admin Users ----------
+
+def _admin_user_response(user: User) -> AdminUserResponse:
+    return AdminUserResponse(
+        id=user.id,
+        name=user.name,
+        email=user.email,
+        role=UserRole(user.role),
+        is_active=user.is_active,
+    )
+
+
+@app.get("/admin/users", response_model=list[AdminUserResponse])
+def list_admin_users(
+    _: User = Depends(require_roles([UserRole.ADMIN, UserRole.SUPER_ADMIN])),
+    db: Session = Depends(get_db),
+) -> list[AdminUserResponse]:
+    return [_admin_user_response(user) for user in UserRepository(db).list_all()]
+
+
+@app.patch("/admin/users/{user_id}/role", response_model=AdminUserResponse)
+def update_admin_user_role(
+    user_id: int,
+    payload: AdminUserRoleUpdateRequest,
+    current_user: User = Depends(require_roles([UserRole.SUPER_ADMIN])),
+    db: Session = Depends(get_db),
+) -> AdminUserResponse:
+    if user_id == current_user.id and payload.role != UserRole.SUPER_ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Super admins cannot remove their own super admin role.",
+        )
+
+    updated_user = UserRepository(db).update_role(user_id, payload.role)
+    if not updated_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    return _admin_user_response(updated_user)
+
+
+@app.patch("/admin/users/{user_id}/status", response_model=AdminUserResponse)
+def update_admin_user_status(
+    user_id: int,
+    payload: AdminUserStatusUpdateRequest,
+    current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.SUPER_ADMIN])),
+    db: Session = Depends(get_db),
+) -> AdminUserResponse:
+    if user_id == current_user.id and not payload.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Admins cannot deactivate their own account.",
+        )
+
+    repo = UserRepository(db)
+    target_user = repo.get_by_id(user_id)
+    if not target_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    if target_user.role == UserRole.SUPER_ADMIN.value and current_user.role != UserRole.SUPER_ADMIN.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only super admins can modify super admin accounts.",
+        )
+
+    updated_user = repo.set_active(user_id, payload.is_active)
+    if not updated_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    return _admin_user_response(updated_user)
 
 
 @app.get("/interests/categories")
