@@ -6,7 +6,12 @@ from datetime import date
 import httpx
 from pydantic import ValidationError
 
-from schemas.itinerary import Activity, DailySchedule, ItineraryResponse
+from schemas.itinerary import (
+    Activity,
+    DailySchedule,
+    ItineraryResponse,
+    RegenerateActivityRequest,
+)
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3")
@@ -51,6 +56,40 @@ USER_PROMPT_TEMPLATE = (
     "food, or one carefully chosen paid highlight. Avoid generic phrases like "
     "'central area' or 'well-known museum'. "
     "Remember: output only the raw JSON, no markdown, no extra text."
+)
+
+REGENERATE_ACTIVITY_SYSTEM_PROMPT = """You are an elite travel-planning editor.
+
+TASK:
+Replace exactly one activity inside an existing itinerary.
+
+OUTPUT RULES - follow these without exception:
+1. Output ONLY raw, valid JSON. Do not use markdown or explanatory text.
+2. Return ONLY the replacement activity object, not the full itinerary.
+3. Use EXACTLY this JSON structure:
+{
+  "title": "<short replacement activity title>",
+  "description": "<specific, practical description>",
+  "time_slot": "<same HH:MM - HH:MM value as the original activity>"
+}
+4. The replacement MUST keep the exact same time_slot as the original activity.
+5. The replacement MUST fit the destination, day context, nearby activities, travel style, budget, and user preferences.
+6. When the original activity implies a specific area, district, landmark cluster, or route, stay in that same area or clearly adjacent area.
+7. The replacement MUST be meaningfully different from the original activity.
+8. Do not duplicate any existing activity title from the itinerary.
+9. Prefer real neighborhoods, landmarks, museums, parks, markets, routes, restaurants, transit choices, or local experiences.
+10. Keep the description concise but actionable: include why it fits this slot and one practical detail.
+11. Do not invent impossible transfers or locations far from the day context unless the constraints explicitly allow it."""
+
+REGENERATE_ACTIVITY_USER_TEMPLATE = (
+    "Destination: {destination}\n"
+    "Replace activity index {activity_index} on day {day_number}.\n"
+    "Original activity JSON:\n{old_activity_json}\n\n"
+    "Current day plan JSON:\n{day_plan_json}\n\n"
+    "Full itinerary activity titles to avoid:\n{existing_titles_json}\n\n"
+    "Traveler preferences JSON:\n{preferences_json}\n\n"
+    "Constraints JSON:\n{constraints_json}\n\n"
+    "Return a single replacement activity. Keep time_slot exactly {time_slot_json}."
 )
 
 DESTINATION_ALIASES = {
@@ -168,6 +207,184 @@ def _validate_daily_schedule(itinerary: ItineraryResponse, requested_days: int) 
                     "Ollama response activity time_slot must use HH:MM - HH:MM "
                     f"format, but got {activity.time_slot!r}."
                 )
+
+
+def _parse_json_model(raw_text: str, model_type):
+    try:
+        parsed = json.loads(raw_text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"Ollama returned non-JSON content: {raw_text[:300]}"
+        ) from exc
+
+    try:
+        return model_type.model_validate(parsed)
+    except ValidationError as exc:
+        raise ValueError(
+            f"Ollama response did not match the expected schema: {exc}"
+        ) from exc
+
+
+async def _post_ollama_json(prompt: str) -> str:
+    payload = {
+        "model": OLLAMA_MODEL,
+        "prompt": prompt,
+        "format": "json",
+        "stream": False,
+    }
+
+    timeout = httpx.Timeout(connect=10.0, read=600.0, write=30.0, pool=10.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        response = await client.post(f"{OLLAMA_BASE_URL}/api/generate", json=payload)
+        response.raise_for_status()
+
+    raw_body = response.json()
+    return raw_body.get("response", "")
+
+
+def _activity_title_key(activity: Activity) -> str:
+    return re.sub(r"\s+", " ", activity.title.strip().lower())
+
+
+def _get_day_plan(payload: RegenerateActivityRequest) -> DailySchedule:
+    if payload.day_plan is not None:
+        if payload.day_plan.day_number != payload.day_index + 1:
+            raise ValueError("Day plan does not match the requested day index.")
+        return payload.day_plan
+
+    if payload.itinerary is None:
+        raise ValueError("Either itinerary or dayPlan must be provided.")
+    if payload.day_index >= len(payload.itinerary.days):
+        raise ValueError("Invalid day index.")
+
+    return payload.itinerary.days[payload.day_index]
+
+
+def _itinerary_titles(payload: RegenerateActivityRequest, day_plan: DailySchedule) -> list[str]:
+    days = payload.itinerary.days if payload.itinerary else [day_plan]
+    titles: list[str] = []
+    for day in days:
+        for activity in day.activities:
+            title = activity.title.strip()
+            if title:
+                titles.append(title)
+    return titles
+
+
+def _build_regenerate_activity_prompt(
+    payload: RegenerateActivityRequest,
+    day_plan: DailySchedule,
+) -> str:
+    existing_titles = _itinerary_titles(payload, day_plan)
+    preferences = payload.user_preferences or {}
+    constraints = {
+        "preserveExactTimeSlot": payload.old_activity.time_slot,
+        "preserveSameAreaWhenInferable": True,
+        "avoidDuplicateTitles": True,
+        "keepDayFlowCoherent": True,
+        **(payload.constraints or {}),
+    }
+
+    return (
+        f"{REGENERATE_ACTIVITY_SYSTEM_PROMPT}\n\n"
+        "Replacement request:\n"
+        + REGENERATE_ACTIVITY_USER_TEMPLATE.format(
+            destination=payload.destination,
+            activity_index=payload.activity_index,
+            day_number=day_plan.day_number,
+            old_activity_json=payload.old_activity.model_dump_json(),
+            day_plan_json=day_plan.model_dump_json(),
+            existing_titles_json=json.dumps(existing_titles, ensure_ascii=False),
+            preferences_json=json.dumps(preferences, ensure_ascii=False),
+            constraints_json=json.dumps(constraints, ensure_ascii=False),
+            time_slot_json=json.dumps(payload.old_activity.time_slot),
+        )
+    )
+
+
+def _validate_replacement_activity(
+    payload: RegenerateActivityRequest,
+    day_plan: DailySchedule,
+    replacement: Activity,
+) -> None:
+    if payload.activity_index >= len(day_plan.activities):
+        raise ValueError("Invalid activity index.")
+
+    selected_activity = day_plan.activities[payload.activity_index]
+    if _activity_title_key(selected_activity) != _activity_title_key(payload.old_activity):
+        raise ValueError("Old activity does not match the selected itinerary activity.")
+
+    if replacement.time_slot != payload.old_activity.time_slot:
+        raise ValueError("Replacement activity must keep the original time_slot.")
+
+    replacement_key = _activity_title_key(replacement)
+    old_key = _activity_title_key(payload.old_activity)
+    if replacement_key == old_key:
+        raise ValueError("Replacement activity must be different from the original.")
+
+    duplicate_titles = {
+        _activity_title_key(activity)
+        for index, activity in enumerate(day_plan.activities)
+        if index != payload.activity_index
+    }
+    if replacement_key in duplicate_titles:
+        raise ValueError("Replacement activity duplicates an existing activity.")
+
+
+def _fallback_replacement_activity(payload: RegenerateActivityRequest) -> Activity:
+    time_slot = payload.old_activity.time_slot
+    destination = payload.destination.strip() or "the destination"
+    old_title = payload.old_activity.title.lower()
+
+    if any(word in old_title for word in ["museum", "gallery", "historic", "castle"]):
+        title = f"{destination} neighborhood heritage walk"
+        detail = "Swap the indoor stop for a nearby heritage route with visible landmarks and flexible pacing."
+    elif any(word in old_title for word in ["dinner", "lunch", "food", "restaurant", "market"]):
+        title = f"{destination} local market tasting route"
+        detail = "Use a casual market or food street to keep the same meal window without committing to one restaurant."
+    elif any(word in old_title for word in ["park", "hike", "garden", "beach", "nature"]):
+        title = f"{destination} scenic viewpoint and easy walk"
+        detail = "Choose a viewpoint or short walking loop that preserves outdoor time and avoids a long transfer."
+    else:
+        title = f"{destination} local discovery walk"
+        detail = "Pick a nearby district, landmark cluster, or waterfront route that fits between the surrounding activities."
+
+    return Activity(
+        title=title,
+        description=f"{detail} Keep it in the {time_slot} slot and avoid repeating the original activity.",
+        time_slot=time_slot,
+    )
+
+
+async def regenerate_single_activity(payload: RegenerateActivityRequest) -> Activity:
+    day_plan = _get_day_plan(payload)
+    if payload.activity_index >= len(day_plan.activities):
+        raise ValueError("Invalid activity index.")
+
+    prompt = _build_regenerate_activity_prompt(payload, day_plan)
+
+    try:
+        raw_text = await _post_ollama_json(prompt)
+        replacement = _parse_json_model(raw_text, Activity)
+    except httpx.ReadTimeout as exc:
+        raise ValueError(
+            "Ollama did not respond in time while regenerating this activity."
+        ) from exc
+    except httpx.ConnectError as exc:
+        if ENABLE_OFFLINE_ITINERARY_FALLBACK:
+            replacement = _fallback_replacement_activity(payload)
+        else:
+            raise ValueError(
+                f"Could not connect to Ollama at {OLLAMA_BASE_URL}. "
+                "Make sure the ollama service is running."
+            ) from exc
+    except httpx.HTTPStatusError as exc:
+        raise ValueError(
+            f"Ollama returned an error: {exc.response.status_code} {exc.response.text[:200]}"
+        ) from exc
+
+    _validate_replacement_activity(payload, day_plan, replacement)
+    return replacement
 
 
 def _format_interest_label(value: str) -> str:

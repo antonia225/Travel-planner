@@ -38,6 +38,21 @@ export type ItineraryResponse = {
   days: DailySchedule[];
 };
 
+export type RegenerateActivityRequest = {
+  destination: string;
+  dayIndex: number;
+  activityIndex: number;
+  oldActivity: Activity;
+  itinerary?: ItineraryResponse;
+  dayPlan?: DailySchedule;
+  userPreferences?: Record<string, unknown>;
+  constraints?: Record<string, unknown>;
+};
+
+export type RegenerateActivityResponse = {
+  activity: Activity;
+};
+
 export type GeneratedTripData = {
   destination?: string;
   days?: {
@@ -284,6 +299,23 @@ export function optimizeBudget(
     null,
     AI_REQUEST_TIMEOUT_MS
   );
+}
+
+export async function regenerateActivity(
+  token: string,
+  payload: RegenerateActivityRequest
+): Promise<Activity> {
+  const response = await fetchJson<RegenerateActivityResponse>(
+    "/itinerary/regenerate-activity",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    token,
+    AI_REQUEST_TIMEOUT_MS
+  );
+
+  return response.activity;
 }
 
 export function saveTrip(payload: {

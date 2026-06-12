@@ -43,10 +43,14 @@ from schemas.saved_trip import (
     SavedTripResponse,
 )
 from schemas.budget import BudgetOptimizerResponse
-from schemas.itinerary import ItineraryResponse
+from schemas.itinerary import (
+    ItineraryResponse,
+    RegenerateActivityRequest,
+    RegenerateActivityResponse,
+)
 from schemas.trip import SaveTripRequest, TripDetailsResponse, TripListResponse, TripStatus
 from services.ai_service import check_ollama_connection
-from services.architect_service import generate_itinerary
+from services.architect_service import generate_itinerary, regenerate_single_activity
 from services.budget_optimizer_service import generate_budget_plan
 from services.auth_service import (
     create_access_token,
@@ -434,6 +438,22 @@ async def optimize_budget(payload: BudgetOptimizerRequest) -> BudgetOptimizerRes
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
         ) from exc
+
+
+@app.post("/itinerary/regenerate-activity", response_model=RegenerateActivityResponse)
+async def regenerate_activity(
+    payload: RegenerateActivityRequest,
+    _: User = Depends(get_current_user),
+) -> RegenerateActivityResponse:
+    try:
+        activity = await regenerate_single_activity(payload)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+    return RegenerateActivityResponse(activity=activity)
 
 
 @app.post("/trips/save", response_model=TripDetailsResponse, status_code=status.HTTP_201_CREATED)

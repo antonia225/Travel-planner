@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import type { ComponentType } from "react";
 import {
   Bed,
@@ -10,6 +10,7 @@ import {
   MapPin,
   Music,
   Plane,
+  RefreshCw,
   Route,
   ShoppingBag,
   TrainFront,
@@ -43,6 +44,12 @@ type ActivityMeta = {
 
 type Props = {
   days?: TimelineDay[];
+  onRegenerateActivity?: (
+    dayIndex: number,
+    activityIndex: number,
+    activity: TimelineActivity
+  ) => void;
+  regeneratingActivityKey?: string | null;
 };
 
 function inferActivityMeta(activity: TimelineActivity): ActivityMeta {
@@ -97,12 +104,24 @@ function inferActivityMeta(activity: TimelineActivity): ActivityMeta {
 
 function TimelineActivityCard({
   activity,
+  activityIndex,
+  dayIndex,
   isFirst,
   isLast,
+  isRegenerating,
+  onRegenerate,
 }: {
   activity: TimelineActivity;
+  activityIndex: number;
+  dayIndex: number;
   isFirst: boolean;
   isLast: boolean;
+  isRegenerating: boolean;
+  onRegenerate?: (
+    dayIndex: number,
+    activityIndex: number,
+    activity: TimelineActivity
+  ) => void;
 }) {
   const { Icon, label } = inferActivityMeta(activity);
 
@@ -118,10 +137,28 @@ function TimelineActivityCard({
 
       <View style={styles.activityCard}>
         <View style={styles.activityHeader}>
-          {activity.time_slot ? (
-            <Text style={styles.timeText}>{activity.time_slot}</Text>
+          <View style={styles.activityHeaderCopy}>
+            {activity.time_slot ? (
+              <Text style={styles.timeText}>{activity.time_slot}</Text>
+            ) : null}
+            <Text style={styles.activityType}>{label}</Text>
+          </View>
+
+          {onRegenerate ? (
+            <TouchableOpacity
+              style={styles.regenerateButton}
+              activeOpacity={0.8}
+              disabled={isRegenerating}
+              accessibilityLabel="Replace activity"
+              onPress={() => onRegenerate(dayIndex, activityIndex, activity)}
+            >
+              {isRegenerating ? (
+                <ActivityIndicator size="small" color={colors.teal700} />
+              ) : (
+                <RefreshCw color={colors.teal700} size={16} strokeWidth={2.4} />
+              )}
+            </TouchableOpacity>
           ) : null}
-          <Text style={styles.activityType}>{label}</Text>
         </View>
 
         <Text style={styles.activityTitle}>{activity.title || "Activity"}</Text>
@@ -133,7 +170,11 @@ function TimelineActivityCard({
   );
 }
 
-export default function ItineraryTimeline({ days }: Props) {
+export default function ItineraryTimeline({
+  days,
+  onRegenerateActivity,
+  regeneratingActivityKey,
+}: Props) {
   if (!days?.length) {
     return null;
   }
@@ -160,8 +201,14 @@ export default function ItineraryTimeline({ days }: Props) {
                 <TimelineActivityCard
                   key={`activity-${dayIndex}-${activityIndex}`}
                   activity={activity}
+                  activityIndex={activityIndex}
+                  dayIndex={dayIndex}
                   isFirst={activityIndex === 0}
                   isLast={activityIndex === activities.length - 1}
+                  isRegenerating={
+                    regeneratingActivityKey === `${dayIndex}:${activityIndex}`
+                  }
+                  onRegenerate={onRegenerateActivity}
                 />
               ))
             ) : (
@@ -250,9 +297,26 @@ const styles = StyleSheet.create({
   activityHeader: {
     alignItems: "center",
     flexDirection: "row",
+    gap: spacing.sm,
+    justifyContent: "space-between",
+    marginBottom: spacing.sm,
+  },
+  activityHeaderCopy: {
+    alignItems: "center",
+    flexDirection: "row",
+    flex: 1,
     flexWrap: "wrap",
     gap: spacing.sm,
-    marginBottom: spacing.sm,
+  },
+  regenerateButton: {
+    alignItems: "center",
+    backgroundColor: colors.teal50,
+    borderColor: colors.teal200,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    height: 34,
+    justifyContent: "center",
+    width: 34,
   },
   timeText: {
     color: colors.teal700,
