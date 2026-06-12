@@ -28,7 +28,13 @@ import PrimaryButton from "../components/PrimaryButton";
 import SectionHeader from "../components/SectionHeader";
 import TripSearchForm from "../components/TripSearchForm";
 import { useAuth } from "../context/AuthContext";
-import { BASE_URL, canAccessAdmin, saveGeneratedTrip } from "../services/api";
+import {
+  BASE_URL,
+  canAccessAdmin,
+  regenerateActivity,
+  saveGeneratedTrip,
+} from "../services/api";
+import type { Activity, ItineraryResponse } from "../services/api";
 import { colors, radius, shadows, spacing } from "../theme/designSystem";
 
 type TripSearchData = {
@@ -121,6 +127,9 @@ export default function HomeScreen({ navigation }: Props) {
 
   const [isGeneratingTrip, setIsGeneratingTrip] = useState(false);
   const [isSavingTrip, setIsSavingTrip] = useState(false);
+  const [regeneratingActivityKey, setRegeneratingActivityKey] = useState<
+    string | null
+  >(null);
   const [savedTripId, setSavedTripId] = useState<number | null>(null);
   const [itineraryResult, setItineraryResult] = useState<ItineraryResult | null>(
     null
@@ -230,6 +239,77 @@ export default function HomeScreen({ navigation }: Props) {
       Alert.alert("Could not save trip", getErrorMessage(error));
     } finally {
       setIsSavingTrip(false);
+    }
+  };
+
+  const handleRegenerateActivity = async (
+    dayIndex: number,
+    activityIndex: number,
+    activity: ItineraryActivity
+  ) => {
+    if (!token || !itineraryResult?.days?.length) {
+      Alert.alert("Not ready", "Generate an itinerary before replacing activities.");
+      return;
+    }
+
+    if (!activity.title || !activity.description || !activity.time_slot) {
+      Alert.alert(
+        "Cannot replace activity",
+        "This activity is missing required details."
+      );
+      return;
+    }
+
+    const destination = itineraryResult.destination || "Generated trip";
+    const activityKey = `${dayIndex}:${activityIndex}`;
+
+    try {
+      setRegeneratingActivityKey(activityKey);
+      const replacement = await regenerateActivity(token, {
+        destination,
+        dayIndex,
+        activityIndex,
+        oldActivity: activity as Activity,
+        itinerary: {
+          destination,
+          days: itineraryResult.days,
+        } as ItineraryResponse,
+        userPreferences: {
+          interests: user?.interests ?? [],
+        },
+        constraints: {
+          preserveExactTimeSlot: activity.time_slot,
+        },
+      });
+
+      setItineraryResult((current) => {
+        if (!current?.days) {
+          return current;
+        }
+
+        return {
+          ...current,
+          destination,
+          days: current.days.map((day, currentDayIndex) => {
+            if (currentDayIndex !== dayIndex) {
+              return day;
+            }
+
+            const activities = day.activities ?? [];
+            return {
+              ...day,
+              activities: activities.map((item, currentActivityIndex) =>
+                currentActivityIndex === activityIndex ? replacement : item
+              ),
+            };
+          }),
+        };
+      });
+      setSavedTripId(null);
+    } catch (error) {
+      Alert.alert("Could not replace activity", getErrorMessage(error));
+    } finally {
+      setRegeneratingActivityKey(null);
     }
   };
 
@@ -378,7 +458,11 @@ export default function HomeScreen({ navigation }: Props) {
               />
 
               {itineraryResult.days && itineraryResult.days.length > 0 ? (
-                <ItineraryTimeline days={itineraryResult.days} />
+                <ItineraryTimeline
+                  days={itineraryResult.days}
+                  regeneratingActivityKey={regeneratingActivityKey}
+                  onRegenerateActivity={handleRegenerateActivity}
+                />
               ) : (
                 <Text style={styles.resultText}>
                   {JSON.stringify(itineraryResult, null, 2)}

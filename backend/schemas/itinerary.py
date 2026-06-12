@@ -1,4 +1,6 @@
-from pydantic import BaseModel, field_validator
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class Activity(BaseModel):
@@ -24,3 +26,20 @@ class DailySchedule(BaseModel):
 class ItineraryResponse(BaseModel):
     destination: str
     days: list[DailySchedule]
+
+
+class RegenerateActivityRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    destination: str
+    day_index: int = Field(..., ge=0, alias="dayIndex")
+    activity_index: int = Field(..., ge=0, alias="activityIndex")
+    old_activity: Activity = Field(..., alias="oldActivity")
+    itinerary: ItineraryResponse | None = None
+    day_plan: DailySchedule | None = Field(default=None, alias="dayPlan")
+    user_preferences: dict[str, Any] = Field(default_factory=dict, alias="userPreferences")
+    constraints: dict[str, Any] = Field(default_factory=dict)
+
+
+class RegenerateActivityResponse(BaseModel):
+    activity: Activity
