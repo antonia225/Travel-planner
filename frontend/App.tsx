@@ -6,6 +6,7 @@ import { ActivityIndicator, View } from "react-native";
 
 import { AuthProvider, useAuth } from "./src/context/AuthContext";
 import AdminDashboardScreen from "./src/screens/AdminDashboardScreen";
+import AdminStatsScreen from "./src/screens/AdminStatsScreen";
 import HomeScreen from "./src/screens/HomeScreen";
 import LibraryScreen from "./src/screens/LibraryScreen";
 import LoginScreen from "./src/screens/LoginScreen";
@@ -63,7 +64,10 @@ function AppStack() {
       <Stack.Screen name="Library" component={LibraryScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
       {canAccessAdmin(user) ? (
-        <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
+        <>
+          <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
+          <Stack.Screen name="AdminStats" component={AdminStatsScreen} />
+        </>
       ) : null}
     </Stack.Navigator>
   );
