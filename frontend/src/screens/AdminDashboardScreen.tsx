@@ -194,9 +194,9 @@ export default function AdminDashboardScreen({ navigation }: Props) {
             <BarChart3 color={colors.teal700} size={22} strokeWidth={2.4} />
           </View>
           <View style={styles.statsLinkCopy}>
-            <Text style={styles.statsLinkTitle}>Usage statistics</Text>
+            <Text style={styles.statsLinkTitle}>AI Agent Performance</Text>
             <Text style={styles.statsLinkText}>
-              Requests, active load, latency, and errors
+              Model timing, failed generations, and backend health
             </Text>
           </View>
         </TouchableOpacity>

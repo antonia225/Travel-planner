@@ -3,7 +3,7 @@ import os
 
 import httpx
 from datetime import date
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
@@ -11,7 +11,13 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from dependencies.auth import get_current_user, require_roles
-from models import User, UserInterestCategory, UserRole, create_all_tables
+from models import AIGenerationLog, User, UserInterestCategory, UserRole, create_all_tables
+from repositories.ai_generation_log_repository import (
+    BUDGET_OPTIMIZER_AGENT_NAME,
+    ITINERARY_AGENT_NAME,
+    AIGenerationLogRepository,
+    metric_label_for_agent,
+)
 from repositories.saved_trip_repository import SavedTripRepository
 from repositories.trip_repository import TripRepository
 from repositories.user_interest_repository import UserInterestRepository
@@ -27,6 +33,12 @@ from schemas.auth import (
     TokenResponse,
     UpdateProfileRequest,
     UserProfile,
+)
+from schemas.admin_metrics import (
+    AdminAIAgentAlert,
+    AdminAIAgentLog,
+    AdminAIAgentMetricsResponse,
+    AdminAIAgentSummary,
 )
 from schemas.interests import (
     InterestCategoriesResponse,
@@ -62,7 +74,10 @@ app = FastAPI(title="AI Travel Planner API")
 
 # Prometheus metrics instrumentation
 if os.getenv("ENABLE_METRICS_ENDPOINT", "false").lower() == "true":
-    Instrumentator().instrument(app).expose(app, include_in_schema=False)
+    Instrumentator(should_instrument_requests_inprogress=True).instrument(app).expose(
+        app,
+        include_in_schema=False,
+    )
 
 
 async def _query_prometheus(client: httpx.AsyncClient, prom_url: str, promql: str) -> float:
@@ -88,7 +103,7 @@ async def admin_stats(
     async with httpx.AsyncClient(timeout=3.0) as client:
         total, active, latency, errors = await asyncio.gather(
             _query_prometheus(client, prom_url, 'sum(http_requests_total)'),
-            _query_prometheus(client, prom_url, 'sum(http_requests_in_progress)'),
+            _query_prometheus(client, prom_url, 'sum(http_requests_inprogress)'),
             _query_prometheus(client, prom_url, 'histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))'),
             _query_prometheus(client, prom_url, 'sum(http_requests_total{status=~"4..|5.."})'),
         )
@@ -99,6 +114,58 @@ async def admin_stats(
         "p95_latency_ms": round(latency * 1000, 2),
         "error_count": int(errors),
     }
+
+
+def _admin_ai_agent_log_response(log: AIGenerationLog) -> AdminAIAgentLog:
+    return AdminAIAgentLog(
+        id=log.id,
+        agent_name=log.agent_name,
+        metric_label=metric_label_for_agent(log.agent_name),
+        operation=log.operation,
+        destination=log.destination,
+        model=log.model,
+        status=log.status,
+        response_time_ms=log.response_time_ms,
+        error_message=log.error_message,
+        fallback_used=log.fallback_used,
+        created_at=log.created_at,
+    )
+
+
+def _admin_ai_agent_alert_response(log: AIGenerationLog) -> AdminAIAgentAlert:
+    message = log.error_message or "AI generation failed."
+    return AdminAIAgentAlert(
+        id=log.id,
+        agent_name=log.agent_name,
+        operation=log.operation,
+        message=message,
+        created_at=log.created_at,
+    )
+
+
+@app.get("/admin/ai-agent-metrics", response_model=AdminAIAgentMetricsResponse)
+def admin_ai_agent_metrics(
+    limit: int = Query(default=50, ge=1, le=100),
+    _: User = Depends(require_roles([UserRole.ADMIN, UserRole.SUPER_ADMIN])),
+    db: Session = Depends(get_db),
+) -> AdminAIAgentMetricsResponse:
+    repo = AIGenerationLogRepository(db)
+    logs = repo.list_recent(limit)
+    failed_logs = [log for log in logs if log.status == "failed"]
+
+    return AdminAIAgentMetricsResponse(
+        summary=AdminAIAgentSummary(
+            itinerary_agent_response_time_ms=repo.latest_response_time_ms(
+                ITINERARY_AGENT_NAME
+            ),
+            budget_optimizer_agent_response_time_ms=repo.latest_response_time_ms(
+                BUDGET_OPTIMIZER_AGENT_NAME
+            ),
+            recent_failure_count=len(failed_logs),
+        ),
+        alerts=[_admin_ai_agent_alert_response(log) for log in failed_logs],
+        logs=[_admin_ai_agent_log_response(log) for log in logs],
+    )
 
 # Development CORS policy; tighten in production.
 app.add_middleware(
@@ -399,6 +466,7 @@ class BudgetOptimizerRequest(BaseModel):
 async def create_itinerary(
     payload: ItineraryRequest,
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> ItineraryResponse:
     try:
         return await generate_itinerary(
@@ -409,6 +477,7 @@ async def create_itinerary(
             travelers=payload.travelers,
             budget=payload.budget,
             user_interests=current_user.interests or [],
+            db=db,
         )
     except ValueError as exc:
         raise HTTPException(
@@ -418,11 +487,15 @@ async def create_itinerary(
 
 
 @app.post("/optimize-budget", response_model=BudgetOptimizerResponse)
-async def optimize_budget(payload: BudgetOptimizerRequest) -> BudgetOptimizerResponse:
+async def optimize_budget(
+    payload: BudgetOptimizerRequest,
+    db: Session = Depends(get_db),
+) -> BudgetOptimizerResponse:
     try:
         return await generate_budget_plan(
             destination=payload.destination,
             budget=payload.budget,
+            db=db,
         )
     except ValueError as exc:
         raise HTTPException(

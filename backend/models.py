@@ -36,6 +36,11 @@ class UserRole(str, Enum):
     SUPER_ADMIN = "super_admin"
 
 
+class AIGenerationStatus(str, Enum):
+    SUCCESS = "success"
+    FAILED = "failed"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -98,6 +103,21 @@ class SavedTrip(Base):
         import json
 
         return json.loads(self.trip_data_json)
+
+
+class AIGenerationLog(Base):
+    __tablename__ = "ai_generation_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    agent_name = Column(String, nullable=False, index=True)
+    operation = Column(String, nullable=False, index=True)
+    model = Column(String, nullable=True)
+    destination = Column(String, nullable=True)
+    status = Column(String, nullable=False, index=True)
+    response_time_ms = Column(Integer, nullable=True)
+    error_message = Column(Text, nullable=True)
+    fallback_used = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, nullable=False, index=True)
 
 
 def create_all_tables() -> None:

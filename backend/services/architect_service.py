@@ -4,16 +4,21 @@ import os
 import re
 from copy import deepcopy
 from datetime import date, timedelta
+from time import perf_counter
 
 import httpx
 from pydantic import ValidationError
+from sqlalchemy.orm import Session
 
+from models import AIGenerationStatus
+from repositories.ai_generation_log_repository import ITINERARY_AGENT_NAME
 from schemas.itinerary import (
     Activity,
     DailySchedule,
     ItineraryResponse,
     RegenerateActivityRequest,
 )
+from services.ai_generation_logger import record_ai_generation_log, response_time_ms
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
 OLLAMA_ITINERARY_MODEL = os.getenv(
@@ -730,6 +735,22 @@ async def _post_ollama_json(
     days: int | None = None,
     response_format: dict | str = "json",
 ) -> str:
+    raw_body = await _post_ollama_json_body(
+        prompt,
+        operation=operation,
+        days=days,
+        response_format=response_format,
+    )
+    return raw_body.get("response", "")
+
+
+async def _post_ollama_json_body(
+    prompt: str,
+    *,
+    operation: str = "regenerate_activity",
+    days: int | None = None,
+    response_format: dict | str = "json",
+) -> dict:
     payload = {
         "model": OLLAMA_ITINERARY_MODEL,
         "prompt": prompt,
@@ -746,7 +767,7 @@ async def _post_ollama_json(
 
     raw_body = response.json()
     _log_ollama_stats(raw_body, operation)
-    return raw_body.get("response", "")
+    return raw_body
 
 
 async def _repair_ollama_json(
@@ -1228,6 +1249,7 @@ async def generate_itinerary(
     travelers: int = 1,
     budget: int | None = None,
     user_interests: list[str] | None = None,
+    db: Session | None = None,
 ) -> ItineraryResponse:
     """
     Sends a structured prompt to the local Ollama instance and returns a
@@ -1249,20 +1271,50 @@ async def generate_itinerary(
         interests_note=interests_note,
     )
 
+    started_at = perf_counter()
+    raw_body: dict | None = None
+
     try:
-        raw_text = await _post_ollama_json(
+        raw_body = await _post_ollama_json_body(
             f"{SYSTEM_PROMPT}\n\nUser request: {user_message}",
             operation="generate_itinerary",
             days=days,
             response_format=ITINERARY_JSON_SCHEMA,
         )
+        raw_text = raw_body.get("response", "")
     except httpx.ReadTimeout as exc:
-        raise ValueError(
+        message = (
             "Ollama did not respond in time. The model may still be loading or "
             "the prompt is too large. Try again in a moment."
-        ) from exc
+        )
+        record_ai_generation_log(
+            db,
+            agent_name=ITINERARY_AGENT_NAME,
+            operation="generate_itinerary",
+            status=AIGenerationStatus.FAILED,
+            model=OLLAMA_ITINERARY_MODEL,
+            destination=destination,
+            response_time_ms=response_time_ms(raw_body, started_at),
+            error_message=message,
+        )
+        raise ValueError(message) from exc
     except httpx.ConnectError as exc:
+        message = (
+            f"Could not connect to Ollama at {OLLAMA_BASE_URL}. "
+            "Make sure the ollama service is running."
+        )
         if ENABLE_OFFLINE_ITINERARY_FALLBACK:
+            record_ai_generation_log(
+                db,
+                agent_name=ITINERARY_AGENT_NAME,
+                operation="generate_itinerary",
+                status=AIGenerationStatus.FAILED,
+                model=OLLAMA_ITINERARY_MODEL,
+                destination=destination,
+                response_time_ms=response_time_ms(raw_body, started_at),
+                error_message=message,
+                fallback_used=True,
+            )
             return _build_offline_itinerary(
                 destination=destination,
                 days=days,
@@ -1272,22 +1324,61 @@ async def generate_itinerary(
                 budget=budget,
                 user_interests=user_interests,
             )
-        raise ValueError(
-            f"Could not connect to Ollama at {OLLAMA_BASE_URL}. "
-            "Make sure the ollama service is running."
-        ) from exc
+        record_ai_generation_log(
+            db,
+            agent_name=ITINERARY_AGENT_NAME,
+            operation="generate_itinerary",
+            status=AIGenerationStatus.FAILED,
+            model=OLLAMA_ITINERARY_MODEL,
+            destination=destination,
+            response_time_ms=response_time_ms(raw_body, started_at),
+            error_message=message,
+        )
+        raise ValueError(message) from exc
     except httpx.HTTPStatusError as exc:
-        raise ValueError(
-            f"Ollama returned an error: {exc.response.status_code} {exc.response.text[:200]}"
-        ) from exc
+        message = f"Ollama returned an error: {exc.response.status_code} {exc.response.text[:200]}"
+        record_ai_generation_log(
+            db,
+            agent_name=ITINERARY_AGENT_NAME,
+            operation="generate_itinerary",
+            status=AIGenerationStatus.FAILED,
+            model=OLLAMA_ITINERARY_MODEL,
+            destination=destination,
+            response_time_ms=response_time_ms(raw_body, started_at),
+            error_message=message,
+        )
+        raise ValueError(message) from exc
 
-    itinerary = await _parse_itinerary_with_repair(
-        raw_text,
-        requested_days=days,
-        budget=budget,
+    try:
+        itinerary = await _parse_itinerary_with_repair(
+            raw_text,
+            requested_days=days,
+            budget=budget,
+        )
+
+        _validate_daily_schedule(itinerary, requested_days=days)
+        _finalize_itinerary_costs(itinerary, budget, require_costs=False)
+        _apply_trip_metadata(itinerary, start_date, end_date, budget)
+    except ValueError as exc:
+        record_ai_generation_log(
+            db,
+            agent_name=ITINERARY_AGENT_NAME,
+            operation="generate_itinerary",
+            status=AIGenerationStatus.FAILED,
+            model=raw_body.get("model") or OLLAMA_ITINERARY_MODEL,
+            destination=destination,
+            response_time_ms=response_time_ms(raw_body, started_at),
+            error_message=str(exc),
+        )
+        raise
+
+    record_ai_generation_log(
+        db,
+        agent_name=ITINERARY_AGENT_NAME,
+        operation="generate_itinerary",
+        status=AIGenerationStatus.SUCCESS,
+        model=raw_body.get("model") or OLLAMA_ITINERARY_MODEL,
+        destination=destination,
+        response_time_ms=response_time_ms(raw_body, started_at),
     )
-
-    _validate_daily_schedule(itinerary, requested_days=days)
-    _finalize_itinerary_costs(itinerary, budget, require_costs=False)
-    _apply_trip_metadata(itinerary, start_date, end_date, budget)
     return itinerary

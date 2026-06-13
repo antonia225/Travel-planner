@@ -11,9 +11,14 @@ services:
       - ./backend:/app
     env_file:
       - ./backend/.env
+    environment:
+      ENABLE_METRICS_ENDPOINT: "true"
+      PROMETHEUS_URL: "http://prometheus:9090"
     depends_on:
       ollama-init:
         condition: service_completed_successfully
+      prometheus:
+        condition: service_started
 
   ollama:
     image: ollama/ollama
