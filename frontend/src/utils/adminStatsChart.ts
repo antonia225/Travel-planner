@@ -1,5 +1,7 @@
 import type { AdminAIAgentMetrics, AdminStats } from "../services/api";
 
+export const COLLAPSED_AI_LOG_COUNT = 3;
+
 export type AdminUsageMetric = {
   key: keyof AdminStats;
   label: string;
@@ -51,6 +53,10 @@ export function buildAIAgentPerformanceMetrics(
       ),
     },
   ];
+}
+
+export function getVisibleAIAgentLogs<T>(logs: T[], showAll: boolean): T[] {
+  return showAll ? logs : logs.slice(0, COLLAPSED_AI_LOG_COUNT);
 }
 
 export function buildAdminUsageMetrics(stats: AdminStats): AdminUsageMetric[] {

@@ -2,8 +2,10 @@ import { getAdminAIAgentMetrics, getAdminStats } from "../src/services/api";
 import {
   buildAIAgentPerformanceMetrics,
   buildAdminUsageMetrics,
+  COLLAPSED_AI_LOG_COUNT,
   formatAgentResponseTime,
   formatAdminStatValue,
+  getVisibleAIAgentLogs,
 } from "../src/utils/adminStatsChart";
 
 describe("getAdminStats", () => {
@@ -145,5 +147,13 @@ describe("getAdminStats", () => {
       "88 ms",
     ]);
     expect(formatAgentResponseTime(null)).toBe("-");
+  });
+
+  it("shows only three AI logs until expanded", () => {
+    const logs = [1, 2, 3, 4, 5];
+
+    expect(COLLAPSED_AI_LOG_COUNT).toBe(3);
+    expect(getVisibleAIAgentLogs(logs, false)).toEqual([1, 2, 3]);
+    expect(getVisibleAIAgentLogs(logs, true)).toEqual(logs);
   });
 });

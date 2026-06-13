@@ -27,7 +27,9 @@ import { colors, radius, shadows, spacing } from "../theme/designSystem";
 import {
   buildAIAgentPerformanceMetrics,
   buildAdminUsageMetrics,
+  COLLAPSED_AI_LOG_COUNT,
   formatAgentResponseTime,
+  getVisibleAIAgentLogs,
 } from "../utils/adminStatsChart";
 
 type Props = {
@@ -43,6 +45,7 @@ export default function AdminStatsScreen({ navigation }: Props) {
     useState<AdminAIAgentMetrics | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showAllLogs, setShowAllLogs] = useState(false);
 
   const fetchStats = useCallback(async () => {
     if (!token) {
@@ -100,6 +103,9 @@ export default function AdminStatsScreen({ navigation }: Props) {
   const hasFailedGenerations =
     (agentMetrics?.summary.recent_failure_count ?? 0) > 0;
   const showInitialLoading = isLoading && !agentMetrics && !stats;
+  const logs = agentMetrics?.logs ?? [];
+  const visibleLogs = getVisibleAIAgentLogs(logs, showAllLogs);
+  const hasHiddenLogs = logs.length > COLLAPSED_AI_LOG_COUNT;
 
   return (
     <SafeAreaView style={styles.root}>
@@ -245,9 +251,9 @@ export default function AdminStatsScreen({ navigation }: Props) {
             </View>
           </View>
 
-          {agentMetrics?.logs.length ? (
+          {logs.length ? (
             <View style={styles.logList}>
-              {agentMetrics.logs.map((log) => (
+              {visibleLogs.map((log) => (
                 <View key={log.id} style={styles.logRow}>
                   <View style={styles.logHeader}>
                     <View style={styles.logCopy}>
@@ -294,6 +300,19 @@ export default function AdminStatsScreen({ navigation }: Props) {
                   ) : null}
                 </View>
               ))}
+              {hasHiddenLogs ? (
+                <TouchableOpacity
+                  style={styles.logToggleButton}
+                  activeOpacity={0.82}
+                  onPress={() => setShowAllLogs((current) => !current)}
+                >
+                  <Text style={styles.logToggleText}>
+                    {showAllLogs
+                      ? "Show only latest 3"
+                      : `Show all ${logs.length} logs`}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           ) : !showInitialLoading ? (
             <Text style={styles.emptyText}>No AI generation logs recorded yet.</Text>
@@ -569,6 +588,21 @@ const styles = StyleSheet.create({
   },
   logList: {
     gap: spacing.sm,
+  },
+  logToggleButton: {
+    alignItems: "center",
+    backgroundColor: colors.teal50,
+    borderColor: colors.teal200,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    minHeight: 42,
+    justifyContent: "center",
+    paddingHorizontal: spacing.md,
+  },
+  logToggleText: {
+    color: colors.teal700,
+    fontSize: 13,
+    fontWeight: "800",
   },
   logRow: {
     backgroundColor: colors.slate50,
