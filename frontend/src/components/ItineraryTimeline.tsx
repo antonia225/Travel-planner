@@ -21,14 +21,18 @@ import {
 
 import { colors, radius, shadows, spacing } from "../theme/designSystem";
 
+const EURO = "\u20ac";
+
 export type TimelineActivity = {
   title?: string;
   description?: string;
   time_slot?: string;
+  estimated_cost_eur?: number | null;
 };
 
 export type TimelineDay = {
   day_number?: number;
+  date?: string | null;
   activities?: TimelineActivity[];
 };
 
@@ -104,6 +108,23 @@ function inferActivityMeta(activity: TimelineActivity): ActivityMeta {
   return { Icon: MapPin, label: "Activity" };
 }
 
+function formatTimelineDate(value?: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) {
+    return value;
+  }
+
+  return new Date(year, month - 1, day).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 function TimelineActivityCard({
   activity,
   activityIndex,
@@ -148,6 +169,14 @@ function TimelineActivityCard({
               <Text style={styles.timeText}>{activity.time_slot}</Text>
             ) : null}
             <Text style={styles.activityType}>{label}</Text>
+            {typeof activity.estimated_cost_eur === "number" ? (
+              <View style={styles.costChip}>
+                <Text style={styles.costText}>
+                  {EURO}
+                  {activity.estimated_cost_eur}
+                </Text>
+              </View>
+            ) : null}
           </View>
 
           {onRegenerate ? (
@@ -209,6 +238,9 @@ export default function ItineraryTimeline({
               <View>
                 <Text style={styles.dayEyebrow}>Day</Text>
                 <Text style={styles.dayTitle}>{day.day_number || dayIndex + 1}</Text>
+                {formatTimelineDate(day.date) ? (
+                  <Text style={styles.dayDate}>{formatTimelineDate(day.date)}</Text>
+                ) : null}
               </View>
             </View>
 
@@ -275,6 +307,13 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "800",
     lineHeight: 26,
+  },
+  dayDate: {
+    color: colors.slate500,
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 18,
+    marginTop: 2,
   },
   timelineItem: {
     alignItems: "stretch",
@@ -356,6 +395,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 3,
     textTransform: "uppercase",
+  },
+  costChip: {
+    backgroundColor: colors.amber50,
+    borderColor: "#fde68a",
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+  },
+  costText: {
+    color: colors.amber600,
+    fontSize: 11,
+    fontWeight: "800",
   },
   activityTitle: {
     color: colors.slate900,

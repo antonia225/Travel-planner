@@ -31,9 +31,12 @@ def _regenerate_payload() -> dict:
             "title": "Louvre Museum Visit",
             "description": "Explore the Louvre galleries.",
             "time_slot": "13:00 - 15:00",
+            "estimated_cost_eur": 22,
         },
         "itinerary": {
             "destination": "Paris",
+            "currency": "EUR",
+            "total_estimated_cost_eur": 57,
             "days": [
                 {
                     "day_number": 1,
@@ -42,16 +45,19 @@ def _regenerate_payload() -> dict:
                             "title": "Eiffel Tower Walk",
                             "description": "Walk around the tower and Champ de Mars.",
                             "time_slot": "09:00 - 11:00",
+                            "estimated_cost_eur": 10,
                         },
                         {
                             "title": "Louvre Museum Visit",
                             "description": "Explore the Louvre galleries.",
                             "time_slot": "13:00 - 15:00",
+                            "estimated_cost_eur": 22,
                         },
                         {
                             "title": "Seine Evening Cruise",
                             "description": "Take a sunset river cruise.",
                             "time_slot": "18:00 - 20:00",
+                            "estimated_cost_eur": 25,
                         },
                     ],
                 }
@@ -75,7 +81,7 @@ def test_regenerate_activity_returns_single_replacement_and_optimized_prompt(
     headers = _auth_headers(client)
     captured_prompt = ""
 
-    async def fake_post_ollama_json(prompt: str) -> str:
+    async def fake_post_ollama_json(prompt: str, **_kwargs) -> str:
         nonlocal captured_prompt
         captured_prompt = prompt
         return json.dumps(
@@ -106,25 +112,27 @@ def test_regenerate_activity_returns_single_replacement_and_optimized_prompt(
     assert set(body.keys()) == {"activity"}
     assert body["activity"]["title"] == "Musee d'Orsay Impressionist Stop"
     assert body["activity"]["time_slot"] == "13:00 - 15:00"
+    assert body["activity"]["estimated_cost_eur"] == 22
     assert "Return ONLY the replacement activity object" in captured_prompt
     assert "Keep time_slot exactly" in captured_prompt
+    assert "estimated_cost_eur" in captured_prompt
     assert "Louvre Museum Visit" in captured_prompt
     assert "Seine Evening Cruise" in captured_prompt
     assert "food_culinary" in captured_prompt
 
 
-def test_regenerate_activity_rejects_replacement_with_changed_time_slot(
+def test_regenerate_activity_preserves_old_slot_when_replacement_time_is_invalid(
     client: TestClient,
     monkeypatch,
 ):
     headers = _auth_headers(client)
 
-    async def fake_post_ollama_json(_: str) -> str:
+    async def fake_post_ollama_json(_: str, **_kwargs) -> str:
         return json.dumps(
             {
                 "title": "Latin Quarter Bookshop Walk",
                 "description": "A nearby alternative walk around bookshops and cafes.",
-                "time_slot": "15:00 - 17:00",
+                "time_slot": "afternoon",
             }
         )
 
@@ -139,5 +147,41 @@ def test_regenerate_activity_rejects_replacement_with_changed_time_slot(
         headers=headers,
     )
 
-    assert response.status_code == 422
-    assert "time_slot" in response.json()["detail"]
+    assert response.status_code == 200
+    body = response.json()
+    assert body["activity"]["title"] == "Latin Quarter Bookshop Walk"
+    assert body["activity"]["time_slot"] == "13:00 - 15:00"
+    assert body["activity"]["estimated_cost_eur"] == 22
+
+
+def test_regenerate_activity_caps_replacement_cost_to_budget_constraint(
+    client: TestClient,
+    monkeypatch,
+):
+    headers = _auth_headers(client)
+    payload = _regenerate_payload()
+    payload["constraints"]["maxReplacementCostEur"] = 12
+
+    async def fake_post_ollama_json(_: str, **_kwargs) -> str:
+        return json.dumps(
+            {
+                "title": "Musee d'Orsay Impressionist Stop",
+                "description": "Use the same afternoon window for a nearby art stop.",
+                "time_slot": "13:00 - 15:00",
+                "estimated_cost_eur": 40,
+            }
+        )
+
+    monkeypatch.setattr(
+        "services.architect_service._post_ollama_json",
+        fake_post_ollama_json,
+    )
+
+    response = client.post(
+        "/itinerary/regenerate-activity",
+        json=payload,
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["activity"]["estimated_cost_eur"] == 12

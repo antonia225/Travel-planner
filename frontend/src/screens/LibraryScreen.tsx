@@ -26,6 +26,7 @@ import { useFocusEffect } from "@react-navigation/native";
 
 import AppCard from "../components/AppCard";
 import CustomInput from "../components/CustomInput";
+import ItineraryBudgetSummary from "../components/ItineraryBudgetSummary";
 import ItineraryTimeline from "../components/ItineraryTimeline";
 import PrimaryButton from "../components/PrimaryButton";
 import SectionHeader from "../components/SectionHeader";
@@ -49,12 +50,71 @@ function getTripSummary(trip: SavedTrip) {
   const days = Array.isArray(trip.trip_data.days)
     ? trip.trip_data.days.length
     : 0;
+  const dateRange = getTripDateRange(trip);
 
   if (days > 0) {
-    return `${destination} - ${days} ${days === 1 ? "day" : "days"}`;
+    return `${destination} - ${days} ${days === 1 ? "day" : "days"}${
+      dateRange ? ` - ${dateRange}` : ""
+    }`;
   }
 
   return destination;
+}
+
+function parseLocalDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function formatTripDate(value?: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  return parseLocalDate(value).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function getTripDateRange(trip: SavedTrip) {
+  const startDate = formatTripDate(
+    typeof trip.trip_data.start_date === "string" ? trip.trip_data.start_date : null
+  );
+  const endDate = formatTripDate(
+    typeof trip.trip_data.end_date === "string" ? trip.trip_data.end_date : null
+  );
+
+  if (startDate && endDate && startDate !== endDate) {
+    return `${startDate} - ${endDate}`;
+  }
+
+  return startDate ?? endDate;
+}
+
+function sumTripActivityCosts(trip: SavedTrip | null) {
+  return (trip?.trip_data.days ?? []).reduce(
+    (total, day) =>
+      total +
+      (day.activities ?? []).reduce(
+        (dayTotal, activity) => dayTotal + (activity.estimated_cost_eur ?? 0),
+        0
+      ),
+    0
+  );
+}
+
+function getTripTotalCost(trip: SavedTrip | null) {
+  return typeof trip?.trip_data.total_estimated_cost_eur === "number"
+    ? trip.trip_data.total_estimated_cost_eur
+    : sumTripActivityCosts(trip);
+}
+
+function getTripBudget(trip: SavedTrip | null) {
+  return typeof trip?.trip_data.budget_eur === "number"
+    ? trip.trip_data.budget_eur
+    : null;
 }
 
 function formatDate(value: string) {
@@ -297,7 +357,18 @@ export default function LibraryScreen({ navigation }: Props) {
             showsVerticalScrollIndicator={false}
           >
             {selectedTrip?.trip_data.days?.length ? (
-              <ItineraryTimeline days={selectedTrip.trip_data.days} />
+              <>
+                {selectedTrip.trip_data.total_estimated_cost_eur !== undefined ||
+                selectedTrip.trip_data.budget_eur !== undefined ? (
+                  <ItineraryBudgetSummary
+                    totalCostEur={getTripTotalCost(selectedTrip)}
+                    budgetEur={getTripBudget(selectedTrip)}
+                    currency={selectedTrip.trip_data.currency ?? "EUR"}
+                  />
+                ) : null}
+
+                <ItineraryTimeline days={selectedTrip.trip_data.days} />
+              </>
             ) : (
               <AppCard>
                 <Text style={styles.rawTripText}>
