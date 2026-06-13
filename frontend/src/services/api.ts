@@ -412,11 +412,8 @@ export function listAdminUsers(token: string): Promise<AdminUser[]> {
   return fetchJson<AdminUser[]>("/admin/users", {}, token);
 }
 
-export function getAdminStats(adminToken?: string): Promise<AdminStats> {
-  const token = adminToken ?? process.env.EXPO_PUBLIC_ADMIN_TOKEN;
-  const headers: Record<string, string> = token ? { "X-Admin-Token": token } : {};
-
-  return fetchJson<AdminStats>("/admin/stats", { headers });
+export function getAdminStats(token: string): Promise<AdminStats> {
+  return fetchJson<AdminStats>("/admin/stats", {}, token);
 }
 
 export function updateAdminUserRole(

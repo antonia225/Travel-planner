@@ -1,10 +1,9 @@
 import asyncio
-import hmac
 import os
 
 import httpx
 from datetime import date
-from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
@@ -76,20 +75,10 @@ async def _query_prometheus(client: httpx.AsyncClient, prom_url: str, promql: st
         return 0.0
 
 
-async def _require_admin_token(x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")) -> None:
-    configured_admin_token = os.getenv("ADMIN_API_TOKEN", "").strip()
-    if not configured_admin_token:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Admin API token not configured.",
-        )
-
-    if not x_admin_token or not hmac.compare_digest(x_admin_token, configured_admin_token):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized.")
-
-
 @app.get("/admin/stats")
-async def admin_stats(_: None = Depends(_require_admin_token)) -> dict:
+async def admin_stats(
+    _: User = Depends(require_roles([UserRole.ADMIN, UserRole.SUPER_ADMIN])),
+) -> dict:
     """
     Queries Prometheus directly for aggregated system metrics.
     Falls back to zeros if Prometheus is unreachable (e.g. during tests).

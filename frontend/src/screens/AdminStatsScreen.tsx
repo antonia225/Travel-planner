@@ -33,16 +33,22 @@ type Props = {
 };
 
 export default function AdminStatsScreen({ navigation }: Props) {
-  const { user } = useAuth();
+  const { token, user } = useAuth();
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchStats = useCallback(async () => {
+    if (!token) {
+      setError("You need to sign in again to view usage statistics.");
+      setStats(null);
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
-      const data = await getAdminStats();
+      const data = await getAdminStats(token);
       setStats(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -50,14 +56,14 @@ export default function AdminStatsScreen({ navigation }: Props) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [token]);
 
   useEffect(() => {
-    if (!canAccessAdmin(user)) return;
+    if (!token || !canAccessAdmin(user)) return;
     fetchStats();
     const id = setInterval(fetchStats, 10_000);
     return () => clearInterval(id);
-  }, [fetchStats, user]);
+  }, [fetchStats, token, user]);
 
   if (!canAccessAdmin(user)) {
     return (

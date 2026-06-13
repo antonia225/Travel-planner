@@ -114,11 +114,10 @@ http://localhost:8000  →  http://192.168.1.YOUR_IP:8000
 
 The backend exposes an admin-only endpoint that returns aggregated usage metrics from Prometheus:
 
-- `GET /admin/stats` — requires header `X-Admin-Token` to match the `ADMIN_API_TOKEN` environment variable set on the backend.
+- `GET /admin/stats` — requires a logged-in user with the `admin` or `super_admin` role.
 
 Environment variables:
 
-- `ADMIN_API_TOKEN` — secret token required to query admin endpoints (set in `backend/.env`).
 - `PROMETHEUS_URL` — URL for Prometheus (defaults to `http://prometheus:9090` in docker-compose).
 
 The frontend includes an `AdminStatsScreen` that polls `/admin/stats` and shows Total Requests, Active Requests, P95 latency (ms) and Error Count.
