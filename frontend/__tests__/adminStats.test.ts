@@ -25,9 +25,17 @@ describe("getAdminStats", () => {
       Promise.resolve({ ok: true, json: () => Promise.resolve(mock) } as any)
     );
 
-    const res = await getAdminStats("test-token");
+    const res = await getAdminStats("jwt-token");
     expect(res.total_requests).toBe(10);
     expect(res.p95_latency_ms).toBeCloseTo(123.45);
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/admin/stats"),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer jwt-token",
+        }),
+      })
+    );
   });
 
   it("throws on non-OK response", async () => {
