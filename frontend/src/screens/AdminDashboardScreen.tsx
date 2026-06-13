@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   ArrowLeft,
+  BarChart3,
   CheckCircle2,
   ShieldCheck,
   ShieldOff,
@@ -33,6 +34,7 @@ import { colors, radius, shadows, spacing } from "../theme/designSystem";
 type Props = {
   navigation: {
     goBack: () => void;
+    navigate: (screen: string) => void;
   };
 };
 
@@ -182,6 +184,22 @@ export default function AdminDashboardScreen({ navigation }: Props) {
             <Text style={styles.summaryLabel}>Admins</Text>
           </View>
         </View>
+
+        <TouchableOpacity
+          style={styles.statsLink}
+          activeOpacity={0.82}
+          onPress={() => navigation.navigate("AdminStats")}
+        >
+          <View style={styles.statsLinkIcon}>
+            <BarChart3 color={colors.teal700} size={22} strokeWidth={2.4} />
+          </View>
+          <View style={styles.statsLinkCopy}>
+            <Text style={styles.statsLinkTitle}>Usage statistics</Text>
+            <Text style={styles.statsLinkText}>
+              Requests, active load, latency, and errors
+            </Text>
+          </View>
+        </TouchableOpacity>
 
         <AppCard elevated>
           <SectionHeader
@@ -407,6 +425,40 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     marginTop: 4,
     textTransform: "uppercase",
+  },
+  statsLink: {
+    alignItems: "center",
+    backgroundColor: colors.white,
+    borderColor: colors.teal200,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.md,
+    padding: spacing.lg,
+    ...shadows.soft,
+  },
+  statsLinkIcon: {
+    alignItems: "center",
+    backgroundColor: colors.teal50,
+    borderRadius: radius.lg,
+    height: 44,
+    justifyContent: "center",
+    width: 44,
+  },
+  statsLinkCopy: {
+    flex: 1,
+  },
+  statsLinkTitle: {
+    color: colors.slate900,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  statsLinkText: {
+    color: colors.slate500,
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 18,
+    marginTop: 2,
   },
   refreshButton: {
     backgroundColor: colors.teal50,

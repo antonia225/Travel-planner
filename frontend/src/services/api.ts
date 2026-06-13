@@ -399,11 +399,13 @@ export function listAdminUsers(token: string): Promise<AdminUser[]> {
 }
 
 export function getAdminStats(adminToken?: string): Promise<AdminStats> {
-  const headers = adminToken
-    ? { "X-Admin-Token": adminToken }
-    : process.env.EXPO_PUBLIC_ADMIN_TOKEN
-    ? { "X-Admin-Token": process.env.EXPO_PUBLIC_ADMIN_TOKEN }
-    : {};
+  const configuredAdminToken =
+    adminToken ?? process.env.EXPO_PUBLIC_ADMIN_TOKEN;
+  const headers: Record<string, string> = {};
+
+  if (configuredAdminToken) {
+    headers["X-Admin-Token"] = configuredAdminToken;
+  }
 
   return fetchJson<AdminStats>("/admin/stats", { headers });
 }

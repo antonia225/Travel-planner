@@ -1,13 +1,38 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { ArrowLeft } from "lucide-react-native";
 import AppCard from "../components/AppCard";
 import PrimaryButton from "../components/PrimaryButton";
 import { colors, radius, shadows, spacing } from "../theme/designSystem";
 import { getAdminStats, AdminStats, canAccessAdmin } from "../services/api";
 import { useAuth } from "../context/AuthContext";
+import {
+  buildAdminUsageMetrics,
+  getUsageMetricPercent,
+} from "../utils/adminStatsChart";
 
-export default function AdminStatsScreen() {
+const chartColors: Record<keyof AdminStats, string> = {
+  total_requests: colors.teal600,
+  active_requests: colors.sky600,
+  p95_latency_ms: colors.violet600,
+  error_count: colors.red500,
+};
+
+type Props = {
+  navigation: {
+    goBack: () => void;
+  };
+};
+
+export default function AdminStatsScreen({ navigation }: Props) {
   const { user } = useAuth();
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -45,14 +70,72 @@ export default function AdminStatsScreen() {
     );
   }
 
+  const usageMetrics = stats ? buildAdminUsageMetrics(stats) : [];
+  const maxMetricValue = Math.max(
+    1,
+    ...usageMetrics.map((metric) => metric.value)
+  );
+
   return (
     <SafeAreaView style={styles.root}>
+      <View style={styles.topBar}>
+        <TouchableOpacity
+          style={styles.backButton}
+          activeOpacity={0.8}
+          onPress={navigation.goBack}
+        >
+          <ArrowLeft color={colors.white} size={22} strokeWidth={2.4} />
+        </TouchableOpacity>
+        <View style={styles.topCopy}>
+          <Text style={styles.topKicker}>Admin dashboard</Text>
+          <Text style={styles.topTitle}>Usage statistics</Text>
+        </View>
+      </View>
+
       <ScrollView contentContainerStyle={styles.container}>
         <AppCard elevated>
-          <Text style={styles.header}>Usage statistics</Text>
+          <Text style={styles.header}>System usage</Text>
 
           {isLoading && !stats ? (
             <ActivityIndicator size="large" color={colors.teal600} />
+          ) : null}
+
+          {stats ? (
+            <View style={styles.chartPanel}>
+              <View style={styles.chartHeader}>
+                <Text style={styles.chartTitle}>System usage chart</Text>
+                <Text style={styles.chartCaption}>Live snapshot</Text>
+              </View>
+
+              {usageMetrics.map((metric) => {
+                const percent = getUsageMetricPercent(
+                  metric.value,
+                  maxMetricValue
+                );
+
+                return (
+                  <View key={metric.key} style={styles.chartRow}>
+                    <View style={styles.chartLabelRow}>
+                      <Text style={styles.chartLabel}>{metric.label}</Text>
+                      <Text style={styles.chartValue}>
+                        {metric.formattedValue}
+                      </Text>
+                    </View>
+                    <View style={styles.chartTrack}>
+                      <View
+                        style={[
+                          styles.chartBar,
+                          {
+                            backgroundColor: chartColors[metric.key],
+                            width: `${percent}%`,
+                          },
+                        ]}
+                      />
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
           ) : null}
 
           <View style={styles.grid}>
@@ -88,8 +171,94 @@ export default function AdminStatsScreen() {
 
 const styles = StyleSheet.create({
   root: { backgroundColor: colors.slate900, flex: 1 },
+  topBar: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.md,
+    paddingBottom: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+  },
+  backButton: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.14)",
+    borderColor: "rgba(255,255,255,0.22)",
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    height: 44,
+    justifyContent: "center",
+    width: 44,
+  },
+  topCopy: {
+    flex: 1,
+  },
+  topKicker: {
+    color: colors.slate300,
+    fontSize: 12,
+    fontWeight: "700",
+    marginBottom: 3,
+  },
+  topTitle: {
+    color: colors.white,
+    fontSize: 26,
+    fontWeight: "800",
+    lineHeight: 32,
+  },
   container: { padding: spacing.lg },
   header: { fontSize: 20, fontWeight: "800", marginBottom: spacing.md },
+  chartPanel: {
+    backgroundColor: colors.slate50,
+    borderColor: colors.slate100,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+    padding: spacing.md,
+  },
+  chartHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  chartTitle: {
+    color: colors.slate900,
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  chartCaption: {
+    color: colors.slate500,
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "uppercase",
+  },
+  chartRow: {
+    gap: spacing.xs,
+  },
+  chartLabelRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  chartLabel: {
+    color: colors.slate700,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  chartValue: {
+    color: colors.slate500,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  chartTrack: {
+    backgroundColor: colors.slate200,
+    borderRadius: radius.pill,
+    height: 12,
+    overflow: "hidden",
+  },
+  chartBar: {
+    borderRadius: radius.pill,
+    height: "100%",
+  },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
   metricCard: {
     backgroundColor: colors.white,
