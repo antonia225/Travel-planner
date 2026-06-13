@@ -1,4 +1,5 @@
-from typing import Any
+from datetime import date as Date
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -7,24 +8,31 @@ class Activity(BaseModel):
     title: str
     description: str
     time_slot: str
+    estimated_cost_eur: int | None = Field(default=None, ge=0)
 
 
 class DailySchedule(BaseModel):
     day_number: int
+    date: Date | None = None
     activities: list[Activity]
 
     @field_validator("activities")
     @classmethod
     def require_minimum_activities(cls, value: list[Activity]) -> list[Activity]:
-        if len(value) < 3:
+        if len(value) != 3:
             raise ValueError(
-                f"Each day must have at least 3 activities, but got {len(value)}."
+                f"Each day must have exactly 3 activities, but got {len(value)}."
             )
         return value
 
 
 class ItineraryResponse(BaseModel):
     destination: str
+    currency: Literal["EUR"] = "EUR"
+    total_estimated_cost_eur: int | None = Field(default=None, ge=0)
+    start_date: Date | None = None
+    end_date: Date | None = None
+    budget_eur: int | None = Field(default=None, ge=0)
     days: list[DailySchedule]
 
 
