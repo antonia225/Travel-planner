@@ -2,6 +2,7 @@ import React from "react";
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import type { ComponentType } from "react";
 import {
+  AlertCircle,
   Bed,
   Camera,
   Car,
@@ -50,6 +51,7 @@ type Props = {
     activity: TimelineActivity
   ) => void;
   regeneratingActivityKey?: string | null;
+  activityErrors?: Record<string, string | undefined>;
 };
 
 function inferActivityMeta(activity: TimelineActivity): ActivityMeta {
@@ -109,6 +111,8 @@ function TimelineActivityCard({
   isFirst,
   isLast,
   isRegenerating,
+  isRegenerateDisabled,
+  errorMessage,
   onRegenerate,
 }: {
   activity: TimelineActivity;
@@ -117,6 +121,8 @@ function TimelineActivityCard({
   isFirst: boolean;
   isLast: boolean;
   isRegenerating: boolean;
+  isRegenerateDisabled: boolean;
+  errorMessage?: string;
   onRegenerate?: (
     dayIndex: number,
     activityIndex: number,
@@ -146,9 +152,12 @@ function TimelineActivityCard({
 
           {onRegenerate ? (
             <TouchableOpacity
-              style={styles.regenerateButton}
+              style={[
+                styles.regenerateButton,
+                isRegenerateDisabled ? styles.regenerateButtonDisabled : null,
+              ]}
               activeOpacity={0.8}
-              disabled={isRegenerating}
+              disabled={isRegenerateDisabled}
               accessibilityLabel="Replace activity"
               onPress={() => onRegenerate(dayIndex, activityIndex, activity)}
             >
@@ -165,6 +174,12 @@ function TimelineActivityCard({
         {activity.description ? (
           <Text style={styles.activityDescription}>{activity.description}</Text>
         ) : null}
+        {errorMessage ? (
+          <View style={styles.activityError}>
+            <AlertCircle color={colors.red700} size={14} strokeWidth={2.4} />
+            <Text style={styles.activityErrorText}>{errorMessage}</Text>
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -174,6 +189,7 @@ export default function ItineraryTimeline({
   days,
   onRegenerateActivity,
   regeneratingActivityKey,
+  activityErrors,
 }: Props) {
   if (!days?.length) {
     return null;
@@ -197,20 +213,24 @@ export default function ItineraryTimeline({
             </View>
 
             {activities.length > 0 ? (
-              activities.map((activity, activityIndex) => (
-                <TimelineActivityCard
-                  key={`activity-${dayIndex}-${activityIndex}`}
-                  activity={activity}
-                  activityIndex={activityIndex}
-                  dayIndex={dayIndex}
-                  isFirst={activityIndex === 0}
-                  isLast={activityIndex === activities.length - 1}
-                  isRegenerating={
-                    regeneratingActivityKey === `${dayIndex}:${activityIndex}`
-                  }
-                  onRegenerate={onRegenerateActivity}
-                />
-              ))
+              activities.map((activity, activityIndex) => {
+                const activityKey = `${dayIndex}:${activityIndex}`;
+
+                return (
+                  <TimelineActivityCard
+                    key={`activity-${dayIndex}-${activityIndex}`}
+                    activity={activity}
+                    activityIndex={activityIndex}
+                    dayIndex={dayIndex}
+                    isFirst={activityIndex === 0}
+                    isLast={activityIndex === activities.length - 1}
+                    isRegenerating={regeneratingActivityKey === activityKey}
+                    isRegenerateDisabled={!!regeneratingActivityKey}
+                    errorMessage={activityErrors?.[activityKey]}
+                    onRegenerate={onRegenerateActivity}
+                  />
+                );
+              })
             ) : (
               <View style={styles.emptyCard}>
                 <Text style={styles.emptyText}>No activities found.</Text>
@@ -318,6 +338,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: 34,
   },
+  regenerateButtonDisabled: {
+    opacity: 0.45,
+  },
   timeText: {
     color: colors.teal700,
     fontSize: 12,
@@ -346,6 +369,25 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     lineHeight: 20,
     marginTop: spacing.xs,
+  },
+  activityError: {
+    alignItems: "flex-start",
+    backgroundColor: colors.red50,
+    borderColor: colors.redBorder,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.xs,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  activityErrorText: {
+    color: colors.red700,
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 17,
   },
   emptyCard: {
     backgroundColor: colors.white,

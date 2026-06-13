@@ -130,6 +130,9 @@ export default function HomeScreen({ navigation }: Props) {
   const [regeneratingActivityKey, setRegeneratingActivityKey] = useState<
     string | null
   >(null);
+  const [activityErrors, setActivityErrors] = useState<
+    Record<string, string | undefined>
+  >({});
   const [savedTripId, setSavedTripId] = useState<number | null>(null);
   const [itineraryResult, setItineraryResult] = useState<ItineraryResult | null>(
     null
@@ -158,6 +161,7 @@ export default function HomeScreen({ navigation }: Props) {
       setItineraryResult(null);
       setSavedTripId(null);
       setTripError(null);
+      setActivityErrors({});
 
       console.log("Sending trip data to backend:", {
         destination: tripData.destination,
@@ -247,6 +251,10 @@ export default function HomeScreen({ navigation }: Props) {
     activityIndex: number,
     activity: ItineraryActivity
   ) => {
+    if (regeneratingActivityKey) {
+      return;
+    }
+
     if (!token || !itineraryResult?.days?.length) {
       Alert.alert("Not ready", "Generate an itinerary before replacing activities.");
       return;
@@ -265,6 +273,12 @@ export default function HomeScreen({ navigation }: Props) {
 
     try {
       setRegeneratingActivityKey(activityKey);
+      setActivityErrors((current) => {
+        const next = { ...current };
+        delete next[activityKey];
+        return next;
+      });
+
       const replacement = await regenerateActivity(token, {
         destination,
         dayIndex,
@@ -305,9 +319,17 @@ export default function HomeScreen({ navigation }: Props) {
           }),
         };
       });
+      setActivityErrors((current) => {
+        const next = { ...current };
+        delete next[activityKey];
+        return next;
+      });
       setSavedTripId(null);
     } catch (error) {
-      Alert.alert("Could not replace activity", getErrorMessage(error));
+      setActivityErrors((current) => ({
+        ...current,
+        [activityKey]: getErrorMessage(error),
+      }));
     } finally {
       setRegeneratingActivityKey(null);
     }
@@ -461,6 +483,7 @@ export default function HomeScreen({ navigation }: Props) {
                 <ItineraryTimeline
                   days={itineraryResult.days}
                   regeneratingActivityKey={regeneratingActivityKey}
+                  activityErrors={activityErrors}
                   onRegenerateActivity={handleRegenerateActivity}
                 />
               ) : (
