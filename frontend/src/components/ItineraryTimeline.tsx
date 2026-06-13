@@ -2,6 +2,7 @@ import React from "react";
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import type { ComponentType } from "react";
 import {
+  AlertCircle,
   Bed,
   Camera,
   Car,
@@ -20,14 +21,18 @@ import {
 
 import { colors, radius, shadows, spacing } from "../theme/designSystem";
 
+const EURO = "\u20ac";
+
 export type TimelineActivity = {
   title?: string;
   description?: string;
   time_slot?: string;
+  estimated_cost_eur?: number | null;
 };
 
 export type TimelineDay = {
   day_number?: number;
+  date?: string | null;
   activities?: TimelineActivity[];
 };
 
@@ -50,6 +55,7 @@ type Props = {
     activity: TimelineActivity
   ) => void;
   regeneratingActivityKey?: string | null;
+  activityErrors?: Record<string, string | undefined>;
 };
 
 function inferActivityMeta(activity: TimelineActivity): ActivityMeta {
@@ -102,6 +108,23 @@ function inferActivityMeta(activity: TimelineActivity): ActivityMeta {
   return { Icon: MapPin, label: "Activity" };
 }
 
+function formatTimelineDate(value?: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) {
+    return value;
+  }
+
+  return new Date(year, month - 1, day).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 function TimelineActivityCard({
   activity,
   activityIndex,
@@ -109,6 +132,8 @@ function TimelineActivityCard({
   isFirst,
   isLast,
   isRegenerating,
+  isRegenerateDisabled,
+  errorMessage,
   onRegenerate,
 }: {
   activity: TimelineActivity;
@@ -117,6 +142,8 @@ function TimelineActivityCard({
   isFirst: boolean;
   isLast: boolean;
   isRegenerating: boolean;
+  isRegenerateDisabled: boolean;
+  errorMessage?: string;
   onRegenerate?: (
     dayIndex: number,
     activityIndex: number,
@@ -142,13 +169,24 @@ function TimelineActivityCard({
               <Text style={styles.timeText}>{activity.time_slot}</Text>
             ) : null}
             <Text style={styles.activityType}>{label}</Text>
+            {typeof activity.estimated_cost_eur === "number" ? (
+              <View style={styles.costChip}>
+                <Text style={styles.costText}>
+                  {EURO}
+                  {activity.estimated_cost_eur}
+                </Text>
+              </View>
+            ) : null}
           </View>
 
           {onRegenerate ? (
             <TouchableOpacity
-              style={styles.regenerateButton}
+              style={[
+                styles.regenerateButton,
+                isRegenerateDisabled ? styles.regenerateButtonDisabled : null,
+              ]}
               activeOpacity={0.8}
-              disabled={isRegenerating}
+              disabled={isRegenerateDisabled}
               accessibilityLabel="Replace activity"
               onPress={() => onRegenerate(dayIndex, activityIndex, activity)}
             >
@@ -165,6 +203,12 @@ function TimelineActivityCard({
         {activity.description ? (
           <Text style={styles.activityDescription}>{activity.description}</Text>
         ) : null}
+        {errorMessage ? (
+          <View style={styles.activityError}>
+            <AlertCircle color={colors.red700} size={14} strokeWidth={2.4} />
+            <Text style={styles.activityErrorText}>{errorMessage}</Text>
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -174,6 +218,7 @@ export default function ItineraryTimeline({
   days,
   onRegenerateActivity,
   regeneratingActivityKey,
+  activityErrors,
 }: Props) {
   if (!days?.length) {
     return null;
@@ -193,24 +238,31 @@ export default function ItineraryTimeline({
               <View>
                 <Text style={styles.dayEyebrow}>Day</Text>
                 <Text style={styles.dayTitle}>{day.day_number || dayIndex + 1}</Text>
+                {formatTimelineDate(day.date) ? (
+                  <Text style={styles.dayDate}>{formatTimelineDate(day.date)}</Text>
+                ) : null}
               </View>
             </View>
 
             {activities.length > 0 ? (
-              activities.map((activity, activityIndex) => (
-                <TimelineActivityCard
-                  key={`activity-${dayIndex}-${activityIndex}`}
-                  activity={activity}
-                  activityIndex={activityIndex}
-                  dayIndex={dayIndex}
-                  isFirst={activityIndex === 0}
-                  isLast={activityIndex === activities.length - 1}
-                  isRegenerating={
-                    regeneratingActivityKey === `${dayIndex}:${activityIndex}`
-                  }
-                  onRegenerate={onRegenerateActivity}
-                />
-              ))
+              activities.map((activity, activityIndex) => {
+                const activityKey = `${dayIndex}:${activityIndex}`;
+
+                return (
+                  <TimelineActivityCard
+                    key={`activity-${dayIndex}-${activityIndex}`}
+                    activity={activity}
+                    activityIndex={activityIndex}
+                    dayIndex={dayIndex}
+                    isFirst={activityIndex === 0}
+                    isLast={activityIndex === activities.length - 1}
+                    isRegenerating={regeneratingActivityKey === activityKey}
+                    isRegenerateDisabled={!!regeneratingActivityKey}
+                    errorMessage={activityErrors?.[activityKey]}
+                    onRegenerate={onRegenerateActivity}
+                  />
+                );
+              })
             ) : (
               <View style={styles.emptyCard}>
                 <Text style={styles.emptyText}>No activities found.</Text>
@@ -255,6 +307,13 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "800",
     lineHeight: 26,
+  },
+  dayDate: {
+    color: colors.slate500,
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 18,
+    marginTop: 2,
   },
   timelineItem: {
     alignItems: "stretch",
@@ -318,6 +377,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: 34,
   },
+  regenerateButtonDisabled: {
+    opacity: 0.45,
+  },
   timeText: {
     color: colors.teal700,
     fontSize: 12,
@@ -334,6 +396,19 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     textTransform: "uppercase",
   },
+  costChip: {
+    backgroundColor: colors.amber50,
+    borderColor: "#fde68a",
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+  },
+  costText: {
+    color: colors.amber600,
+    fontSize: 11,
+    fontWeight: "800",
+  },
   activityTitle: {
     color: colors.slate900,
     fontSize: 15,
@@ -346,6 +421,25 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     lineHeight: 20,
     marginTop: spacing.xs,
+  },
+  activityError: {
+    alignItems: "flex-start",
+    backgroundColor: colors.red50,
+    borderColor: colors.redBorder,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.xs,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  activityErrorText: {
+    color: colors.red700,
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 17,
   },
   emptyCard: {
     backgroundColor: colors.white,

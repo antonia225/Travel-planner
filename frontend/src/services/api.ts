@@ -26,15 +26,22 @@ export type Activity = {
   title: string;
   description: string;
   time_slot: string;
+  estimated_cost_eur?: number | null;
 };
 
 export type DailySchedule = {
   day_number: number;
+  date?: string | null;
   activities: Activity[];
 };
 
 export type ItineraryResponse = {
   destination: string;
+  currency?: "EUR";
+  total_estimated_cost_eur?: number | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  budget_eur?: number | null;
   days: DailySchedule[];
 };
 
@@ -57,12 +64,19 @@ export type GeneratedTripData = {
   destination?: string;
   days?: {
     day_number?: number;
+    date?: string | null;
     activities?: {
       title?: string;
       description?: string;
       time_slot?: string;
+      estimated_cost_eur?: number | null;
     }[];
   }[];
+  currency?: "EUR";
+  total_estimated_cost_eur?: number | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  budget_eur?: number | null;
   [key: string]: unknown;
 };
 
@@ -399,13 +413,8 @@ export function listAdminUsers(token: string): Promise<AdminUser[]> {
 }
 
 export function getAdminStats(adminToken?: string): Promise<AdminStats> {
-  const configuredAdminToken =
-    adminToken ?? process.env.EXPO_PUBLIC_ADMIN_TOKEN;
-  const headers: Record<string, string> = {};
-
-  if (configuredAdminToken) {
-    headers["X-Admin-Token"] = configuredAdminToken;
-  }
+  const token = adminToken ?? process.env.EXPO_PUBLIC_ADMIN_TOKEN;
+  const headers: Record<string, string> = token ? { "X-Admin-Token": token } : {};
 
   return fetchJson<AdminStats>("/admin/stats", { headers });
 }

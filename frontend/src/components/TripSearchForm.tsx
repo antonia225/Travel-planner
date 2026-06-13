@@ -34,6 +34,7 @@ type Props = {
 type DateField = "startDate" | "endDate";
 
 const WEEK_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const EURO = "\u20ac";
 const MONTH_NAMES = [
   "January",
   "February",
@@ -275,7 +276,7 @@ export default function TripSearchForm({ onSubmit }: Props) {
           containerStyle={styles.splitField}
         />
         <CustomInput
-          label="Budget"
+          label={`Budget (${EURO})`}
           error={errors.budget}
           placeholder="800"
           value={budget}

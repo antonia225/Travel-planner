@@ -57,6 +57,7 @@ from services.auth_service import (
     hash_password,
     verify_password,
 )
+from seed_users import seed_demo_users
 
 app = FastAPI(title="AI Travel Planner API")
 
@@ -123,6 +124,7 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup() -> None:
     create_all_tables()
+    seed_demo_users()
 
 
 # ---------- Routes ----------

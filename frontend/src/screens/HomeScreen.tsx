@@ -23,6 +23,7 @@ import {
 } from "lucide-react-native";
 
 import AppCard from "../components/AppCard";
+import ItineraryBudgetSummary from "../components/ItineraryBudgetSummary";
 import ItineraryTimeline from "../components/ItineraryTimeline";
 import PrimaryButton from "../components/PrimaryButton";
 import SectionHeader from "../components/SectionHeader";
@@ -49,15 +50,22 @@ type ItineraryActivity = {
   title?: string;
   description?: string;
   time_slot?: string;
+  estimated_cost_eur?: number | null;
 };
 
 type ItineraryDay = {
   day_number?: number;
+  date?: string | null;
   activities?: ItineraryActivity[];
 };
 
 type ItineraryResult = {
   destination?: string;
+  currency?: "EUR";
+  total_estimated_cost_eur?: number | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  budget_eur?: number | null;
   days?: ItineraryDay[];
   [key: string]: unknown;
 };
@@ -122,6 +130,41 @@ function formatBackendDetail(detail: unknown) {
   return null;
 }
 
+function formatIsoDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function sumActivityCosts(days?: ItineraryDay[]) {
+  return (days ?? []).reduce(
+    (total, day) =>
+      total +
+      (day.activities ?? []).reduce(
+        (dayTotal, activity) => dayTotal + (activity.estimated_cost_eur ?? 0),
+        0
+      ),
+    0
+  );
+}
+
+function addCalendarDatesToDays(days: ItineraryDay[] | undefined, startDate: string) {
+  const parsedStartDate = parseLocalDate(startDate);
+
+  return (days ?? []).map((day, index) => ({
+    ...day,
+    date: day.date ?? formatIsoDate(addDays(parsedStartDate, index)),
+  }));
+}
+
 export default function HomeScreen({ navigation }: Props) {
   const { user, token, isLoading } = useAuth();
 
@@ -130,6 +173,10 @@ export default function HomeScreen({ navigation }: Props) {
   const [regeneratingActivityKey, setRegeneratingActivityKey] = useState<
     string | null
   >(null);
+  const [activityErrors, setActivityErrors] = useState<
+    Record<string, string | undefined>
+  >({});
+  const [activityBudgetEur, setActivityBudgetEur] = useState<number | null>(null);
   const [savedTripId, setSavedTripId] = useState<number | null>(null);
   const [itineraryResult, setItineraryResult] = useState<ItineraryResult | null>(
     null
@@ -156,8 +203,10 @@ export default function HomeScreen({ navigation }: Props) {
     try {
       setIsGeneratingTrip(true);
       setItineraryResult(null);
+      setActivityBudgetEur(null);
       setSavedTripId(null);
       setTripError(null);
+      setActivityErrors({});
 
       console.log("Sending trip data to backend:", {
         destination: tripData.destination,
@@ -206,7 +255,18 @@ export default function HomeScreen({ navigation }: Props) {
       }
 
       console.log("AI itinerary result:", result);
-      setItineraryResult(result as ItineraryResult);
+      const generatedItinerary = result as ItineraryResult;
+      const enrichedItinerary: ItineraryResult = {
+        ...generatedItinerary,
+        start_date: generatedItinerary.start_date ?? tripData.startDate,
+        end_date: generatedItinerary.end_date ?? tripData.endDate,
+        budget_eur: generatedItinerary.budget_eur ?? tripData.budget,
+        currency: generatedItinerary.currency ?? "EUR",
+        days: addCalendarDatesToDays(generatedItinerary.days, tripData.startDate),
+      };
+
+      setItineraryResult(enrichedItinerary);
+      setActivityBudgetEur(tripData.budget);
       Alert.alert("Success", "AI itinerary generated.");
     } catch (error) {
       const message = getErrorMessage(error);
@@ -247,6 +307,10 @@ export default function HomeScreen({ navigation }: Props) {
     activityIndex: number,
     activity: ItineraryActivity
   ) => {
+    if (regeneratingActivityKey) {
+      return;
+    }
+
     if (!token || !itineraryResult?.days?.length) {
       Alert.alert("Not ready", "Generate an itinerary before replacing activities.");
       return;
@@ -262,9 +326,23 @@ export default function HomeScreen({ navigation }: Props) {
 
     const destination = itineraryResult.destination || "Generated trip";
     const activityKey = `${dayIndex}:${activityIndex}`;
+    const currentTotal =
+      itineraryResult.total_estimated_cost_eur ?? sumActivityCosts(itineraryResult.days);
+    const budgetEur = itineraryResult.budget_eur ?? activityBudgetEur;
+    const oldActivityCost = activity.estimated_cost_eur ?? 0;
+    const remainingBudget =
+      typeof budgetEur === "number" ? Math.max(budgetEur - currentTotal, 0) : null;
+    const maxReplacementCostEur =
+      remainingBudget === null ? undefined : oldActivityCost + remainingBudget;
 
     try {
       setRegeneratingActivityKey(activityKey);
+      setActivityErrors((current) => {
+        const next = { ...current };
+        delete next[activityKey];
+        return next;
+      });
+
       const replacement = await regenerateActivity(token, {
         destination,
         dayIndex,
@@ -279,6 +357,9 @@ export default function HomeScreen({ navigation }: Props) {
         },
         constraints: {
           preserveExactTimeSlot: activity.time_slot,
+          currentTotalCostEur: currentTotal,
+          budgetEur,
+          maxReplacementCostEur,
         },
       });
 
@@ -287,10 +368,7 @@ export default function HomeScreen({ navigation }: Props) {
           return current;
         }
 
-        return {
-          ...current,
-          destination,
-          days: current.days.map((day, currentDayIndex) => {
+        const updatedDays = current.days.map((day, currentDayIndex) => {
             if (currentDayIndex !== dayIndex) {
               return day;
             }
@@ -302,16 +380,35 @@ export default function HomeScreen({ navigation }: Props) {
                 currentActivityIndex === activityIndex ? replacement : item
               ),
             };
-          }),
+          });
+
+        return {
+          ...current,
+          destination,
+          currency: current.currency ?? "EUR",
+          total_estimated_cost_eur: sumActivityCosts(updatedDays),
+          days: updatedDays,
         };
+      });
+      setActivityErrors((current) => {
+        const next = { ...current };
+        delete next[activityKey];
+        return next;
       });
       setSavedTripId(null);
     } catch (error) {
-      Alert.alert("Could not replace activity", getErrorMessage(error));
+      setActivityErrors((current) => ({
+        ...current,
+        [activityKey]: getErrorMessage(error),
+      }));
     } finally {
       setRegeneratingActivityKey(null);
     }
   };
+
+  const displayedActivityTotal =
+    itineraryResult?.total_estimated_cost_eur ?? sumActivityCosts(itineraryResult?.days);
+  const currency = itineraryResult?.currency ?? "EUR";
 
   if (isLoading) {
     return (
@@ -458,11 +555,20 @@ export default function HomeScreen({ navigation }: Props) {
               />
 
               {itineraryResult.days && itineraryResult.days.length > 0 ? (
-                <ItineraryTimeline
-                  days={itineraryResult.days}
-                  regeneratingActivityKey={regeneratingActivityKey}
-                  onRegenerateActivity={handleRegenerateActivity}
-                />
+                <>
+                  <ItineraryBudgetSummary
+                    totalCostEur={displayedActivityTotal}
+                    budgetEur={activityBudgetEur}
+                    currency={currency}
+                  />
+
+                  <ItineraryTimeline
+                    days={itineraryResult.days}
+                    regeneratingActivityKey={regeneratingActivityKey}
+                    activityErrors={activityErrors}
+                    onRegenerateActivity={handleRegenerateActivity}
+                  />
+                </>
               ) : (
                 <Text style={styles.resultText}>
                   {JSON.stringify(itineraryResult, null, 2)}
