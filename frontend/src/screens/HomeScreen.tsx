@@ -23,6 +23,7 @@ import {
 } from "lucide-react-native";
 
 import AppCard from "../components/AppCard";
+import BudgetOptimizationSummary from "../components/BudgetOptimizationSummary";
 import ItineraryBudgetSummary from "../components/ItineraryBudgetSummary";
 import ItineraryTimeline from "../components/ItineraryTimeline";
 import PrimaryButton from "../components/PrimaryButton";
@@ -38,6 +39,7 @@ import {
 } from "../services/api";
 import type {
   Activity,
+  BudgetOptimizerActivity,
   BudgetOptimizerResponse,
   ItineraryResponse,
 } from "../services/api";
@@ -53,26 +55,27 @@ type TripSearchData = {
   budget: number;
 };
 
-type ItineraryActivity = {
+export type ItineraryActivity = {
   title?: string;
   description?: string;
   time_slot?: string;
   estimated_cost_eur?: number | null;
 };
 
-type ItineraryDay = {
+export type ItineraryDay = {
   day_number?: number;
   date?: string | null;
   activities?: ItineraryActivity[];
 };
 
-type ItineraryResult = {
+export type ItineraryResult = {
   destination?: string;
   currency?: "EUR";
   total_estimated_cost_eur?: number | null;
   start_date?: string | null;
   end_date?: string | null;
   budget_eur?: number | null;
+  budget_optimization?: BudgetOptimizerResponse | null;
   days?: ItineraryDay[];
   [key: string]: unknown;
 };
@@ -172,6 +175,45 @@ function addCalendarDatesToDays(days: ItineraryDay[] | undefined, startDate: str
     ...day,
     date: day.date ?? formatIsoDate(addDays(parsedStartDate, index)),
   }));
+}
+
+export function selectMostExpensiveBudgetActivities(
+  days: ItineraryDay[] | undefined,
+  limit = 3
+): BudgetOptimizerActivity[] {
+  return (days ?? [])
+    .flatMap((day, dayIndex) =>
+      (day.activities ?? []).map((activity) => ({
+        title: activity.title?.trim() || "Untitled activity",
+        description: activity.description?.trim() || "No description provided.",
+        time_slot: activity.time_slot?.trim() || "Flexible time",
+        day_number: day.day_number ?? dayIndex + 1,
+        estimated_cost_eur: activity.estimated_cost_eur,
+      }))
+    )
+    .filter(
+      (
+        activity
+      ): activity is BudgetOptimizerActivity =>
+        typeof activity.estimated_cost_eur === "number" &&
+        activity.estimated_cost_eur > 0
+    )
+    .sort((first, second) => second.estimated_cost_eur - first.estimated_cost_eur)
+    .slice(0, limit);
+}
+
+export function buildTripDataToSave<T extends ItineraryResult>(
+  itinerary: T,
+  budgetOptimization: BudgetOptimizerResponse | null
+): T {
+  if (!budgetOptimization) {
+    return itinerary;
+  }
+
+  return {
+    ...itinerary,
+    budget_optimization: budgetOptimization,
+  };
 }
 
 export default function HomeScreen({ navigation }: Props) {
@@ -304,14 +346,19 @@ export default function HomeScreen({ navigation }: Props) {
     }
 
     const destination = itineraryResult.destination || "Generated trip";
+    const tripDataToSave = buildTripDataToSave(
+      itineraryResult,
+      budgetOptimizationResult
+    );
 
     try {
       setIsSavingTrip(true);
       const savedTrip = await saveGeneratedTrip(
         token,
         `${destination} trip`,
-        itineraryResult
+        tripDataToSave
       );
+      setItineraryResult(tripDataToSave);
       setSavedTripId(savedTrip.id);
       Alert.alert("Trip saved", "You can find it in your library.");
     } catch (error) {
@@ -357,9 +404,27 @@ export default function HomeScreen({ navigation }: Props) {
 
     try {
       setBudgetOptimizationStatus("loading");
+      setBudgetOptimizationResult(null);
       setBudgetOptimizationError(null);
 
-      const result = await optimizeBudget(token, destination, budgetEur);
+      const expensiveActivities = selectMostExpensiveBudgetActivities(
+        itineraryResult.days
+      );
+
+      if (expensiveActivities.length === 0) {
+        setBudgetOptimizationStatus("error");
+        setBudgetOptimizationError(
+          "No paid activities found to optimize in this itinerary."
+        );
+        return;
+      }
+
+      const result = await optimizeBudget(
+        token,
+        destination,
+        budgetEur,
+        expensiveActivities
+      );
 
       setBudgetOptimizationResult(result);
       setBudgetOptimizationStatus("success");
@@ -377,7 +442,6 @@ export default function HomeScreen({ navigation }: Props) {
       setBudgetOptimizationResult(null);
       setBudgetOptimizationStatus("error");
       setBudgetOptimizationError(message);
-      Alert.alert("Could not optimize budget", message);
     }
   };
 
@@ -463,6 +527,7 @@ export default function HomeScreen({ navigation }: Props) {
 
         return {
           ...current,
+          budget_optimization: null,
           destination,
           currency: current.currency ?? "EUR",
           total_estimated_cost_eur: sumActivityCosts(updatedDays),
@@ -474,6 +539,9 @@ export default function HomeScreen({ navigation }: Props) {
         delete next[activityKey];
         return next;
       });
+      setBudgetOptimizationStatus("idle");
+      setBudgetOptimizationResult(null);
+      setBudgetOptimizationError(null);
       setSavedTripId(null);
     } catch (error) {
       setActivityErrors((current) => ({
@@ -686,37 +754,10 @@ export default function HomeScreen({ navigation }: Props) {
 
                   {budgetOptimizationStatus === "success" &&
                   budgetOptimizationResult ? (
-                    <View style={styles.budgetOptimizationPanel}>
-                      <Text style={styles.budgetOptimizationTitle}>
-                        Optimized budget plan
-                      </Text>
-                      <Text style={styles.budgetOptimizationMeta}>
-                        {budgetOptimizationResult.destination} - {EURO}
-                        {budgetOptimizationResult.total_budget} EUR
-                      </Text>
-                      <View style={styles.recommendationList}>
-                        {budgetOptimizationResult.recommendations.map(
-                          (item, index) => (
-                            <View
-                              key={`${item.category}-${index}`}
-                              style={styles.recommendationItem}
-                            >
-                              <View style={styles.recommendationHeader}>
-                                <Text style={styles.recommendationCategory}>
-                                  {item.category}
-                                </Text>
-                                <Text style={styles.recommendationCost}>
-                                  {item.estimated_cost}
-                                </Text>
-                              </View>
-                              <Text style={styles.recommendationText}>
-                                {item.recommendation}
-                              </Text>
-                            </View>
-                          )
-                        )}
-                      </View>
-                    </View>
+                    <BudgetOptimizationSummary
+                      result={budgetOptimizationResult}
+                      saved={!!savedTripId}
+                    />
                   ) : null}
 
                   <ItineraryTimeline
