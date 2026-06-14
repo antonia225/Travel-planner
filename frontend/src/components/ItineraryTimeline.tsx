@@ -17,9 +17,11 @@ import {
   TrainFront,
   Trees,
   Utensils,
+  X,
 } from "lucide-react-native";
 
 import { colors, radius, shadows, spacing } from "../theme/designSystem";
+import { mapBudgetRecommendationsToActivityKeys } from "../utils/budgetOptimization";
 
 const EURO = "\u20ac";
 
@@ -36,6 +38,20 @@ export type TimelineDay = {
   activities?: TimelineActivity[];
 };
 
+export type TimelineBudgetRecommendation = {
+  original_activity?: string | null;
+  original_cost_eur?: number | null;
+  suggested_alternative?: string | null;
+  recommendation?: string | null;
+  estimated_alternative_cost_eur?: number | null;
+  estimated_savings_eur?: number | null;
+  reason?: string | null;
+};
+
+export type TimelineBudgetOptimization = {
+  recommendations: TimelineBudgetRecommendation[];
+};
+
 type IconComponent = ComponentType<{
   color?: string;
   size?: number;
@@ -49,11 +65,13 @@ type ActivityMeta = {
 
 type Props = {
   days?: TimelineDay[];
+  budgetOptimization?: TimelineBudgetOptimization | null;
   onRegenerateActivity?: (
     dayIndex: number,
     activityIndex: number,
     activity: TimelineActivity
   ) => void;
+  onCancelRegenerateActivity?: () => void;
   regeneratingActivityKey?: string | null;
   activityErrors?: Record<string, string | undefined>;
 };
@@ -133,8 +151,10 @@ function TimelineActivityCard({
   isLast,
   isRegenerating,
   isRegenerateDisabled,
+  budgetRecommendation,
   errorMessage,
   onRegenerate,
+  onCancelRegenerate,
 }: {
   activity: TimelineActivity;
   activityIndex: number;
@@ -143,14 +163,19 @@ function TimelineActivityCard({
   isLast: boolean;
   isRegenerating: boolean;
   isRegenerateDisabled: boolean;
+  budgetRecommendation?: TimelineBudgetRecommendation;
   errorMessage?: string;
   onRegenerate?: (
     dayIndex: number,
     activityIndex: number,
     activity: TimelineActivity
   ) => void;
+  onCancelRegenerate?: () => void;
 }) {
   const { Icon, label } = inferActivityMeta(activity);
+  const alternative =
+    budgetRecommendation?.suggested_alternative ??
+    budgetRecommendation?.recommendation;
 
   return (
     <View style={styles.timelineItem}>
@@ -180,28 +205,87 @@ function TimelineActivityCard({
           </View>
 
           {onRegenerate ? (
-            <TouchableOpacity
-              style={[
-                styles.regenerateButton,
-                isRegenerateDisabled ? styles.regenerateButtonDisabled : null,
-              ]}
-              activeOpacity={0.8}
-              disabled={isRegenerateDisabled}
-              accessibilityLabel="Replace activity"
-              onPress={() => onRegenerate(dayIndex, activityIndex, activity)}
-            >
-              {isRegenerating ? (
+            isRegenerating ? (
+              <View style={styles.regenerateActive}>
                 <ActivityIndicator size="small" color={colors.teal700} />
-              ) : (
+                <TouchableOpacity
+                  style={styles.cancelRegenerateButton}
+                  activeOpacity={0.8}
+                  accessibilityLabel="Cancel activity refresh"
+                  onPress={onCancelRegenerate}
+                >
+                  <X color={colors.white} size={15} strokeWidth={2.6} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={[
+                  styles.regenerateButton,
+                  isRegenerateDisabled ? styles.regenerateButtonDisabled : null,
+                ]}
+                activeOpacity={0.8}
+                disabled={isRegenerateDisabled}
+                accessibilityLabel="Replace activity"
+                onPress={() => onRegenerate(dayIndex, activityIndex, activity)}
+              >
                 <RefreshCw color={colors.teal700} size={16} strokeWidth={2.4} />
-              )}
-            </TouchableOpacity>
+              </TouchableOpacity>
+            )
           ) : null}
         </View>
 
         <Text style={styles.activityTitle}>{activity.title || "Activity"}</Text>
         {activity.description ? (
           <Text style={styles.activityDescription}>{activity.description}</Text>
+        ) : null}
+        {alternative ? (
+          <View style={styles.alternativeCard}>
+            <Text style={styles.alternativeLabel}>Alternative</Text>
+            <Text style={styles.alternativeText}>{alternative}</Text>
+            <View style={styles.alternativeCostRow}>
+              {typeof budgetRecommendation?.original_cost_eur === "number" ? (
+                <View style={styles.alternativeCostChip}>
+                  <Text style={styles.alternativeCostLabel}>Original</Text>
+                  <Text style={styles.alternativeCostValue}>
+                    {EURO}
+                    {budgetRecommendation.original_cost_eur}
+                  </Text>
+                </View>
+              ) : null}
+              {typeof budgetRecommendation?.estimated_alternative_cost_eur ===
+              "number" ? (
+                <View style={[styles.alternativeCostChip, styles.altCostChip]}>
+                  <Text
+                    style={[
+                      styles.alternativeCostLabel,
+                      styles.altCostChipLabel,
+                    ]}
+                  >
+                    Alt cost
+                  </Text>
+                  <Text
+                    style={[
+                      styles.alternativeCostValue,
+                      styles.altCostChipValue,
+                    ]}
+                  >
+                    {EURO}
+                    {budgetRecommendation.estimated_alternative_cost_eur}
+                  </Text>
+                </View>
+              ) : null}
+              {typeof budgetRecommendation?.estimated_savings_eur ===
+              "number" ? (
+                <View style={[styles.alternativeCostChip, styles.savingsChip]}>
+                  <Text style={styles.savingsChipLabel}>Save</Text>
+                  <Text style={styles.savingsChipValue}>
+                    {EURO}
+                    {budgetRecommendation.estimated_savings_eur}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
         ) : null}
         {errorMessage ? (
           <View style={styles.activityError}>
@@ -216,13 +300,20 @@ function TimelineActivityCard({
 
 export default function ItineraryTimeline({
   days,
+  budgetOptimization,
   onRegenerateActivity,
+  onCancelRegenerateActivity,
   regeneratingActivityKey,
   activityErrors,
 }: Props) {
   if (!days?.length) {
     return null;
   }
+
+  const recommendationByActivityKey = mapBudgetRecommendationsToActivityKeys(
+    days,
+    budgetOptimization
+  );
 
   return (
     <View style={styles.container}>
@@ -258,8 +349,12 @@ export default function ItineraryTimeline({
                     isLast={activityIndex === activities.length - 1}
                     isRegenerating={regeneratingActivityKey === activityKey}
                     isRegenerateDisabled={!!regeneratingActivityKey}
+                    budgetRecommendation={
+                      recommendationByActivityKey[activityKey]?.recommendation
+                    }
                     errorMessage={activityErrors?.[activityKey]}
                     onRegenerate={onRegenerateActivity}
+                    onCancelRegenerate={onCancelRegenerateActivity}
                   />
                 );
               })
@@ -380,6 +475,21 @@ const styles = StyleSheet.create({
   regenerateButtonDisabled: {
     opacity: 0.45,
   },
+  regenerateActive: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.xs,
+  },
+  cancelRegenerateButton: {
+    alignItems: "center",
+    backgroundColor: colors.red500,
+    borderColor: colors.red500,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    height: 34,
+    justifyContent: "center",
+    width: 34,
+  },
   timeText: {
     color: colors.teal700,
     fontSize: 12,
@@ -421,6 +531,82 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     lineHeight: 20,
     marginTop: spacing.xs,
+  },
+  alternativeCard: {
+    backgroundColor: colors.sky50,
+    borderColor: "#bae6fd",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: spacing.xs,
+    marginTop: spacing.md,
+    padding: spacing.md,
+  },
+  alternativeLabel: {
+    color: colors.sky600,
+    fontSize: 11,
+    fontWeight: "800",
+    lineHeight: 15,
+    textTransform: "uppercase",
+  },
+  alternativeText: {
+    color: colors.slate700,
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 19,
+  },
+  alternativeCostRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  alternativeCostChip: {
+    backgroundColor: colors.white,
+    borderColor: colors.slate200,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  alternativeCostLabel: {
+    color: colors.slate500,
+    fontSize: 10,
+    fontWeight: "800",
+    lineHeight: 13,
+    textTransform: "uppercase",
+  },
+  alternativeCostValue: {
+    color: colors.slate900,
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 16,
+  },
+  altCostChip: {
+    backgroundColor: colors.amber50,
+    borderColor: "#fde68a",
+  },
+  altCostChipLabel: {
+    color: colors.amber600,
+  },
+  altCostChipValue: {
+    color: colors.amber600,
+  },
+  savingsChip: {
+    backgroundColor: colors.teal50,
+    borderColor: colors.teal200,
+  },
+  savingsChipLabel: {
+    color: colors.teal700,
+    fontSize: 10,
+    fontWeight: "800",
+    lineHeight: 13,
+    textTransform: "uppercase",
+  },
+  savingsChipValue: {
+    color: colors.teal700,
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 16,
   },
   activityError: {
     alignItems: "flex-start",

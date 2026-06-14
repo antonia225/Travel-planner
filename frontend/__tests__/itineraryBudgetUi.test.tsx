@@ -7,13 +7,16 @@ jest.mock("@react-native-async-storage/async-storage", () =>
 
 import ItineraryBudgetSummary from "../src/components/ItineraryBudgetSummary";
 import ItineraryTimeline from "../src/components/ItineraryTimeline";
-import BudgetOptimizationSummary from "../src/components/BudgetOptimizationSummary";
 import TripSearchForm from "../src/components/TripSearchForm";
 import {
   buildTripDataToSave,
   selectMostExpensiveBudgetActivities,
 } from "../src/screens/HomeScreen";
 import { optimizeBudget, saveGeneratedTrip } from "../src/services/api";
+import {
+  getBudgetOptimizationSavings,
+  removeBudgetRecommendationForActivity,
+} from "../src/utils/budgetOptimization";
 
 const EURO = "\u20ac";
 
@@ -94,13 +97,49 @@ describe("itinerary budget UI", () => {
 
   it("shows the total euro budget summary", () => {
     const tree = renderToJson(
-      <ItineraryBudgetSummary totalCostEur={245} budgetEur={800} />
+      <ItineraryBudgetSummary
+        totalCostEur={245}
+        budgetEur={800}
+        estimatedSavingsEur={40}
+      />
     );
 
     const visibleText = collectText(tree).join("");
 
     expect(visibleText).toContain("Activities total cost");
-    expect(visibleText).toContain(`${EURO}245 of ${EURO}800 budget EUR`);
+    expect(visibleText).toContain(`${EURO}245 of ${EURO}800 budget`);
+    expect(visibleText).not.toContain("budget EUR");
+    expect(visibleText).toContain(`Save${EURO}40`);
+    expect(visibleText).toContain("with alternatives");
+  });
+
+  it("sums per-activity savings instead of trusting the backend total", () => {
+    const savings = getBudgetOptimizationSavings({
+      destination: "Rome",
+      total_budget: 1000,
+      total_estimated_savings_eur: 999,
+      recommendations: [
+        {
+          original_activity: "Museum",
+          estimated_savings_eur: 12,
+        },
+        {
+          original_activity: "Dinner",
+          estimated_savings_eur: 28,
+        },
+      ],
+    });
+
+    expect(savings).toBe(40);
+  });
+
+  it("shows a cancel option while itinerary generation is loading", () => {
+    const tree = renderToJson(<TripSearchForm isSubmitting onCancel={jest.fn()} />);
+
+    const visibleText = collectText(tree).join("");
+
+    expect(visibleText).toContain("Generating itinerary");
+    expect(visibleText).toContain("Cancel");
   });
 
   it("selects the three most expensive paid activities", () => {
@@ -287,14 +326,24 @@ describe("itinerary budget UI", () => {
     );
   });
 
-  it("renders estimated savings before and after saving", () => {
+  it("renders budget alternatives inside the itinerary", () => {
     const tree = renderToJson(
-      <BudgetOptimizationSummary
-        saved
-        result={{
-          destination: "Rome",
-          total_budget: 1000,
-          total_estimated_savings_eur: 40,
+      <ItineraryTimeline
+        days={[
+          {
+            day_number: 1,
+            date: "2026-09-17",
+            activities: [
+              {
+                title: "Rooftop dinner",
+                description: "Dinner with a view.",
+                time_slot: "19:00 - 21:00",
+                estimated_cost_eur: 70,
+              },
+            ],
+          },
+        ]}
+        budgetOptimization={{
           recommendations: [
             {
               original_activity: "Rooftop dinner",
@@ -311,10 +360,90 @@ describe("itinerary budget UI", () => {
 
     const visibleText = collectText(tree).join("");
 
-    expect(visibleText).toContain("Estimated savings");
-    expect(visibleText).toContain(`Save${EURO}40`);
     expect(visibleText).toContain("Rooftop dinner");
+    expect(visibleText).toContain("Alternative");
     expect(visibleText).toContain("Choose a neighborhood trattoria.");
-    expect(visibleText).toContain("Budget suggestions saved with this trip.");
+    expect(visibleText).toContain(`Original${EURO}70`);
+    expect(visibleText).toContain(`Alt cost${EURO}30`);
+    expect(visibleText).toContain(`Save${EURO}40`);
+    expect(visibleText).not.toContain("Budget suggestions saved with this trip.");
+  });
+
+  it("removes only the refreshed activity's budget alternative", () => {
+    const optimization = {
+      destination: "Rome",
+      total_budget: 1000,
+      total_estimated_savings_eur: 70,
+      recommendations: [
+        {
+          original_activity: "Rooftop dinner",
+          original_cost_eur: 70,
+          suggested_alternative: "Choose a neighborhood trattoria.",
+          estimated_alternative_cost_eur: 30,
+          estimated_savings_eur: 40,
+        },
+        {
+          original_activity: "Boat tour",
+          original_cost_eur: 50,
+          suggested_alternative: "Take a self-guided river walk.",
+          estimated_alternative_cost_eur: 20,
+          estimated_savings_eur: 30,
+        },
+      ],
+    };
+
+    const filtered = removeBudgetRecommendationForActivity(
+      [
+        {
+          activities: [
+            {
+              title: "Rooftop dinner",
+              estimated_cost_eur: 70,
+            },
+            {
+              title: "Boat tour",
+              estimated_cost_eur: 50,
+            },
+          ],
+        },
+      ],
+      optimization,
+      0,
+      0
+    );
+
+    expect(filtered?.recommendations).toHaveLength(1);
+    expect(filtered?.recommendations[0].original_activity).toBe("Boat tour");
+    expect(getBudgetOptimizationSavings(filtered)).toBe(30);
+
+    const tree = renderToJson(
+      <ItineraryTimeline
+        days={[
+          {
+            day_number: 1,
+            activities: [
+              {
+                title: "Fresh dinner",
+                description: "New activity.",
+                time_slot: "19:00 - 21:00",
+                estimated_cost_eur: 65,
+              },
+              {
+                title: "Boat tour",
+                description: "Harbor tour.",
+                time_slot: "10:00 - 12:00",
+                estimated_cost_eur: 50,
+              },
+            ],
+          },
+        ]}
+        budgetOptimization={filtered}
+      />
+    );
+
+    const visibleText = collectText(tree).join("");
+
+    expect(visibleText).not.toContain("Choose a neighborhood trattoria.");
+    expect(visibleText).toContain("Take a self-guided river walk.");
   });
 });

@@ -38,13 +38,13 @@ export default function PrimaryButton({
     variant === "primary" ? styles.primary : null,
     variant === "secondary" ? styles.secondary : null,
     variant === "destructive" ? styles.destructive : null,
-    isDisabled ? styles.disabled : null,
+    disabled && !loading ? styles.disabled : null,
     style,
   ];
   const textStyle = [
     styles.text,
     variant === "secondary" ? styles.secondaryText : null,
-    isDisabled ? styles.disabledText : null,
+    disabled && !loading ? styles.disabledText : null,
   ];
   const indicatorColor =
     disabled && !loading
@@ -60,14 +60,14 @@ export default function PrimaryButton({
       activeOpacity={0.8}
       {...props}
     >
-      {loading ? (
-        <ActivityIndicator color={indicatorColor} />
-      ) : (
-        <View style={styles.content}>
-          {icon ? <View style={styles.icon}>{icon}</View> : null}
-          <Text style={textStyle}>{title}</Text>
-        </View>
-      )}
+      <View style={styles.content}>
+        {loading ? (
+          <ActivityIndicator color={indicatorColor} style={styles.icon} />
+        ) : icon ? (
+          <View style={styles.icon}>{icon}</View>
+        ) : null}
+        <Text style={textStyle}>{title}</Text>
+      </View>
     </TouchableOpacity>
   );
 }

@@ -10,17 +10,21 @@ type Props = {
   totalCostEur: number;
   budgetEur?: number | null;
   currency?: "EUR";
+  estimatedSavingsEur?: number | null;
 };
 
 export default function ItineraryBudgetSummary({
   totalCostEur,
   budgetEur,
-  currency = "EUR",
+  estimatedSavingsEur,
 }: Props) {
   const budgetText =
     budgetEur !== null && budgetEur !== undefined
       ? ` of ${EURO}${budgetEur} budget`
       : "";
+
+  const hasSavings =
+    typeof estimatedSavingsEur === "number" && estimatedSavingsEur > 0;
 
   return (
     <View style={styles.budgetSummary}>
@@ -30,9 +34,19 @@ export default function ItineraryBudgetSummary({
         <Text style={styles.budgetSummaryValue}>
           {EURO}
           {totalCostEur}
-          {budgetText} {currency}
+          {budgetText}
         </Text>
       </View>
+      {hasSavings ? (
+        <View style={styles.savingsBadge}>
+          <Text style={styles.savingsLabel}>Save</Text>
+          <Text style={styles.savingsValue}>
+            {EURO}
+            {estimatedSavingsEur}
+          </Text>
+          <Text style={styles.savingsSubtext}>with alternatives</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -66,5 +80,32 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     lineHeight: 22,
     marginTop: 2,
+  },
+  savingsBadge: {
+    alignItems: "center",
+    backgroundColor: colors.teal600,
+    borderRadius: radius.md,
+    minWidth: 72,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  savingsLabel: {
+    color: colors.teal100,
+    fontSize: 10,
+    fontWeight: "800",
+    lineHeight: 14,
+    textTransform: "uppercase",
+  },
+  savingsValue: {
+    color: colors.white,
+    fontSize: 17,
+    fontWeight: "800",
+    lineHeight: 21,
+  },
+  savingsSubtext: {
+    color: colors.teal100,
+    fontSize: 10,
+    fontWeight: "800",
+    lineHeight: 13,
   },
 });
