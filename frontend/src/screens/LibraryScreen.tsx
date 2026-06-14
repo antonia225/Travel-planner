@@ -16,6 +16,7 @@ import {
   CalendarDays,
   Check,
   Clock3,
+  Download,
   Edit3,
   Eye,
   FolderOpen,
@@ -24,6 +25,9 @@ import {
   X,
 } from "lucide-react-native";
 import { useFocusEffect } from "@react-navigation/native";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
 
 import AppCard from "../components/AppCard";
 import CustomInput from "../components/CustomInput";
@@ -40,6 +44,10 @@ import {
 import type { BudgetOptimizerResponse, SavedTrip } from "../services/api";
 import { colors, radius, shadows, spacing } from "../theme/designSystem";
 import { getVisibleBudgetOptimizationSavings } from "../utils/budgetOptimization";
+import {
+  buildSavedTripPdfHtml,
+  getSavedTripPdfFileName,
+} from "../utils/savedTripPdf";
 
 type Props = {
   navigation: {
@@ -167,6 +175,7 @@ export default function LibraryScreen({ navigation }: Props) {
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   const loadSavedTrips = useCallback(
     async (refreshing = false) => {
@@ -271,6 +280,76 @@ export default function LibraryScreen({ navigation }: Props) {
         },
       ]
     );
+  };
+
+  const savePdfToDevice = async (uri: string, fileName: string) => {
+    const storageAccess = FileSystem.StorageAccessFramework;
+    if (!storageAccess) {
+      return false;
+    }
+
+    try {
+      const permissions = await storageAccess.requestDirectoryPermissionsAsync();
+      if (!permissions.granted) {
+        return false;
+      }
+
+      const pdfBase64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      const savedUri = await storageAccess.createFileAsync(
+        permissions.directoryUri,
+        fileName,
+        "application/pdf"
+      );
+
+      await FileSystem.writeAsStringAsync(savedUri, pdfBase64, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const downloadSelectedTripPdf = async () => {
+    if (!selectedTrip || isExportingPdf) {
+      return;
+    }
+
+    try {
+      setIsExportingPdf(true);
+      const html = buildSavedTripPdfHtml(selectedTrip);
+      const fileName = getSavedTripPdfFileName(selectedTrip);
+      const { uri } = await Print.printToFileAsync({ html });
+
+      if (await savePdfToDevice(uri, fileName)) {
+        Alert.alert("PDF downloaded", "Your itinerary PDF was saved.");
+        return;
+      }
+
+      if (!(await Sharing.isAvailableAsync())) {
+        Alert.alert(
+          "PDF created",
+          `Your itinerary PDF was created, but direct saving and sharing are not available on this device. File: ${fileName}`
+        );
+        return;
+      }
+
+      await Sharing.shareAsync(uri, {
+        dialogTitle: fileName,
+        mimeType: "application/pdf",
+        UTI: "com.adobe.pdf",
+      });
+    } catch (error) {
+      Alert.alert(
+        "Could not export PDF",
+        error instanceof Error ? error.message : "Something went wrong."
+      );
+    } finally {
+      setIsExportingPdf(false);
+    }
   };
 
   return (
@@ -404,18 +483,38 @@ export default function LibraryScreen({ navigation }: Props) {
       >
         <SafeAreaView style={styles.modalRoot}>
           <View style={styles.modalHeader}>
-            <View style={styles.modalTitleWrap}>
-              <Text style={styles.modalKicker}>Saved trip</Text>
-              <Text style={styles.modalTitle}>
-                {selectedTrip ? getTripDisplayTitle(selectedTrip) : ""}
-              </Text>
+            <View style={styles.modalTitleRow}>
+              <View style={styles.modalTitleWrap}>
+                <Text style={styles.modalKicker}>Saved trip</Text>
+                <Text style={styles.modalTitle}>
+                  {selectedTrip ? getTripDisplayTitle(selectedTrip) : ""}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.closeButton}
+                activeOpacity={0.8}
+                onPress={() => setSelectedTrip(null)}
+              >
+                <X color={colors.slate700} size={20} strokeWidth={2.4} />
+              </TouchableOpacity>
             </View>
             <TouchableOpacity
-              style={styles.closeButton}
+              style={[
+                styles.downloadPdfButton,
+                isExportingPdf ? styles.downloadPdfButtonDisabled : null,
+              ]}
               activeOpacity={0.8}
-              onPress={() => setSelectedTrip(null)}
+              disabled={!selectedTrip || isExportingPdf}
+              onPress={downloadSelectedTripPdf}
             >
-              <X color={colors.slate700} size={20} strokeWidth={2.4} />
+              {isExportingPdf ? (
+                <ActivityIndicator color={colors.amber600} size="small" />
+              ) : (
+                <>
+                  <Download color={colors.amber600} size={16} strokeWidth={2.5} />
+                  <Text style={styles.downloadPdfText}>Download PDF</Text>
+                </>
+              )}
             </TouchableOpacity>
           </View>
 
@@ -687,14 +786,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modalHeader: {
-    alignItems: "center",
+    alignItems: "stretch",
     backgroundColor: colors.white,
     borderBottomColor: colors.slate200,
     borderBottomWidth: 1,
-    flexDirection: "row",
     gap: spacing.md,
     paddingHorizontal: 20,
     paddingVertical: spacing.lg,
+  },
+  modalTitleRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.md,
   },
   modalTitleWrap: {
     flex: 1,
@@ -720,6 +823,30 @@ const styles = StyleSheet.create({
     height: 42,
     justifyContent: "center",
     width: 42,
+  },
+  downloadPdfButton: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: colors.white,
+    borderColor: colors.amber600,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.xs,
+    justifyContent: "center",
+    maxWidth: "100%",
+    minHeight: 42,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  downloadPdfButtonDisabled: {
+    opacity: 0.7,
+  },
+  downloadPdfText: {
+    color: colors.amber600,
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 16,
   },
   modalContent: {
     padding: 20,

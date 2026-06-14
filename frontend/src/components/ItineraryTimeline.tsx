@@ -5,7 +5,6 @@ import {
   AlertCircle,
   Bed,
   Camera,
-  Car,
   Coffee,
   Landmark,
   MapPin,
@@ -21,6 +20,10 @@ import {
 } from "lucide-react-native";
 
 import { colors, radius, shadows, spacing } from "../theme/designSystem";
+import {
+  inferActivityCategoryMeta,
+  type ActivityCategoryKey,
+} from "../utils/activityMeta";
 import { mapBudgetRecommendationsToActivityKeys } from "../utils/budgetOptimization";
 
 const EURO = "\u20ac";
@@ -76,54 +79,23 @@ type Props = {
   activityErrors?: Record<string, string | undefined>;
 };
 
+const iconByCategory: Record<ActivityCategoryKey, IconComponent> = {
+  dining: Utensils,
+  sightseeing: Landmark,
+  transit: TrainFront,
+  flight: Plane,
+  stay: Bed,
+  cafe: Coffee,
+  outdoor: Trees,
+  shopping: ShoppingBag,
+  entertainment: Music,
+  explore: Camera,
+  activity: MapPin,
+};
+
 function inferActivityMeta(activity: TimelineActivity): ActivityMeta {
-  const text = `${activity.title ?? ""} ${activity.description ?? ""}`.toLowerCase();
-
-  if (/restaurant|dinner|lunch|breakfast|food|dining|meal|bistro|cafe|bar/.test(text)) {
-    return { Icon: Utensils, label: "Dining" };
-  }
-
-  if (/museum|monument|landmark|temple|cathedral|castle|palace|gallery|historic/.test(text)) {
-    return { Icon: Landmark, label: "Sightseeing" };
-  }
-
-  if (/train|metro|subway|rail|station/.test(text)) {
-    return { Icon: TrainFront, label: "Transit" };
-  }
-
-  if (/car|taxi|drive|transfer|bus|transport|arrival|depart/.test(text)) {
-    return { Icon: Car, label: "Transit" };
-  }
-
-  if (/flight|airport|plane/.test(text)) {
-    return { Icon: Plane, label: "Flight" };
-  }
-
-  if (/hotel|check-in|check in|stay|accommodation/.test(text)) {
-    return { Icon: Bed, label: "Stay" };
-  }
-
-  if (/coffee|tea|bakery|brunch/.test(text)) {
-    return { Icon: Coffee, label: "Cafe" };
-  }
-
-  if (/park|garden|hike|nature|beach|trail/.test(text)) {
-    return { Icon: Trees, label: "Outdoor" };
-  }
-
-  if (/shop|market|souvenir|mall/.test(text)) {
-    return { Icon: ShoppingBag, label: "Shopping" };
-  }
-
-  if (/show|concert|music|theater|nightlife/.test(text)) {
-    return { Icon: Music, label: "Entertainment" };
-  }
-
-  if (/photo|view|scenic|walk|tour/.test(text)) {
-    return { Icon: Camera, label: "Explore" };
-  }
-
-  return { Icon: MapPin, label: "Activity" };
+  const category = inferActivityCategoryMeta(activity);
+  return { Icon: iconByCategory[category.key], label: category.label };
 }
 
 function formatTimelineDate(value?: string | null) {
