@@ -489,6 +489,7 @@ async def create_itinerary(
 @app.post("/optimize-budget", response_model=BudgetOptimizerResponse)
 async def optimize_budget(
     payload: BudgetOptimizerRequest,
+    _: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> BudgetOptimizerResponse:
     try:

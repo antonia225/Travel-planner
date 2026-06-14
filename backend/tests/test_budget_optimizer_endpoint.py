@@ -3,6 +3,20 @@ import json
 import httpx
 
 _OLLAMA_GENERATE_URL = "http://ollama:11434/api/generate"
+_VALID_USER = {
+    "name": "Budget Tester",
+    "email": "budget@example.com",
+    "password": "Secure1Password",
+}
+
+
+def _auth_headers(client) -> dict[str, str]:
+    client.post("/register", json=_VALID_USER)
+    login_response = client.post(
+        "/login",
+        json={"email": _VALID_USER["email"], "password": _VALID_USER["password"]},
+    )
+    return {"Authorization": f"Bearer {login_response.json()['access_token']}"}
 
 
 def _patch_async_client(monkeypatch, response):
@@ -62,6 +76,7 @@ def test_optimize_budget_returns_200_with_valid_model_json(client, monkeypatch):
     response = client.post(
         "/optimize-budget",
         json={"destination": "Rome", "budget": 1000},
+        headers=_auth_headers(client),
     )
 
     assert response.status_code == 200
@@ -86,6 +101,7 @@ def test_optimize_budget_returns_422_when_model_json_is_invalid(client, monkeypa
     response = client.post(
         "/optimize-budget",
         json={"destination": "Rome", "budget": 1000},
+        headers=_auth_headers(client),
     )
 
     assert response.status_code == 422
@@ -112,8 +128,18 @@ def test_optimize_budget_returns_422_on_upstream_http_error(client, monkeypatch)
     response = client.post(
         "/optimize-budget",
         json={"destination": "Rome", "budget": 1000},
+        headers=_auth_headers(client),
     )
 
     assert response.status_code == 422
     assert "Ollama returned an error: 500" in response.json()["detail"]
     assert captured["url"] == _OLLAMA_GENERATE_URL
+
+
+def test_optimize_budget_requires_authentication(client):
+    response = client.post(
+        "/optimize-budget",
+        json={"destination": "Rome", "budget": 1000},
+    )
+
+    assert response.status_code == 401

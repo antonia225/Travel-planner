@@ -32,11 +32,18 @@ import { useAuth } from "../context/AuthContext";
 import {
   BASE_URL,
   canAccessAdmin,
+  optimizeBudget,
   regenerateActivity,
   saveGeneratedTrip,
 } from "../services/api";
-import type { Activity, ItineraryResponse } from "../services/api";
+import type {
+  Activity,
+  BudgetOptimizerResponse,
+  ItineraryResponse,
+} from "../services/api";
 import { colors, radius, shadows, spacing } from "../theme/designSystem";
+
+const EURO = "\u20ac";
 
 type TripSearchData = {
   destination: string;
@@ -73,6 +80,8 @@ type ItineraryResult = {
 type BackendErrorResponse = {
   detail?: unknown;
 };
+
+type BudgetOptimizationStatus = "idle" | "loading" | "success" | "error";
 
 type Props = {
   navigation: {
@@ -182,6 +191,13 @@ export default function HomeScreen({ navigation }: Props) {
     null
   );
   const [tripError, setTripError] = useState<string | null>(null);
+  const [budgetOptimizationStatus, setBudgetOptimizationStatus] =
+    useState<BudgetOptimizationStatus>("idle");
+  const [budgetOptimizationResult, setBudgetOptimizationResult] =
+    useState<BudgetOptimizerResponse | null>(null);
+  const [budgetOptimizationError, setBudgetOptimizationError] = useState<
+    string | null
+  >(null);
 
   const handleTripSearch = async (tripData: TripSearchData) => {
     if (!token) {
@@ -207,6 +223,9 @@ export default function HomeScreen({ navigation }: Props) {
       setSavedTripId(null);
       setTripError(null);
       setActivityErrors({});
+      setBudgetOptimizationStatus("idle");
+      setBudgetOptimizationResult(null);
+      setBudgetOptimizationError(null);
 
       console.log("Sending trip data to backend:", {
         destination: tripData.destination,
@@ -299,6 +318,66 @@ export default function HomeScreen({ navigation }: Props) {
       Alert.alert("Could not save trip", getErrorMessage(error));
     } finally {
       setIsSavingTrip(false);
+    }
+  };
+
+  const handleOptimizeBudget = async () => {
+    if (budgetOptimizationStatus === "loading") {
+      return;
+    }
+
+    if (!token) {
+      const message = "Please log in again before optimizing your budget.";
+      setBudgetOptimizationStatus("error");
+      setBudgetOptimizationResult(null);
+      setBudgetOptimizationError(message);
+      Alert.alert("Not logged in", message);
+      return;
+    }
+
+    if (!itineraryResult) {
+      Alert.alert(
+        "Nothing to optimize",
+        "Generate a trip before optimizing its budget."
+      );
+      return;
+    }
+
+    const destination = itineraryResult.destination || "Generated trip";
+    const budgetEur = itineraryResult.budget_eur ?? activityBudgetEur;
+
+    if (typeof budgetEur !== "number" || budgetEur <= 0) {
+      const message = "This itinerary does not have a valid budget to optimize.";
+      setBudgetOptimizationStatus("error");
+      setBudgetOptimizationResult(null);
+      setBudgetOptimizationError(message);
+      Alert.alert("Could not optimize budget", message);
+      return;
+    }
+
+    try {
+      setBudgetOptimizationStatus("loading");
+      setBudgetOptimizationError(null);
+
+      const result = await optimizeBudget(token, destination, budgetEur);
+
+      setBudgetOptimizationResult(result);
+      setBudgetOptimizationStatus("success");
+      setItineraryResult((current) =>
+        current
+          ? {
+              ...current,
+              budget_optimization: result,
+            }
+          : current
+      );
+      setSavedTripId(null);
+    } catch (error) {
+      const message = getErrorMessage(error);
+      setBudgetOptimizationResult(null);
+      setBudgetOptimizationStatus("error");
+      setBudgetOptimizationError(message);
+      Alert.alert("Could not optimize budget", message);
     }
   };
 
@@ -409,6 +488,7 @@ export default function HomeScreen({ navigation }: Props) {
   const displayedActivityTotal =
     itineraryResult?.total_estimated_cost_eur ?? sumActivityCosts(itineraryResult?.days);
   const currency = itineraryResult?.currency ?? "EUR";
+  const isOptimizingBudget = budgetOptimizationStatus === "loading";
 
   if (isLoading) {
     return (
@@ -561,6 +641,83 @@ export default function HomeScreen({ navigation }: Props) {
                     budgetEur={activityBudgetEur}
                     currency={currency}
                   />
+
+                  <View style={styles.budgetActions}>
+                    <PrimaryButton
+                      title="Optimize Budget"
+                      loading={isOptimizingBudget}
+                      disabled={isOptimizingBudget}
+                      fullWidth={false}
+                      variant="secondary"
+                      icon={
+                        <Sparkles
+                          color={colors.teal700}
+                          size={16}
+                          strokeWidth={2.4}
+                        />
+                      }
+                      onPress={handleOptimizeBudget}
+                      style={styles.optimizeBudgetButton}
+                    />
+                  </View>
+
+                  {isOptimizingBudget ? (
+                    <View style={styles.budgetFeedbackPanel}>
+                      <ActivityIndicator size="small" color={colors.teal600} />
+                      <Text style={styles.budgetFeedbackText}>
+                        Optimizing your budget recommendations...
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {budgetOptimizationStatus === "error" &&
+                  budgetOptimizationError ? (
+                    <View style={styles.budgetErrorPanel}>
+                      <AlertCircle
+                        color={colors.red700}
+                        size={16}
+                        strokeWidth={2.4}
+                      />
+                      <Text style={styles.budgetErrorText}>
+                        {budgetOptimizationError}
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {budgetOptimizationStatus === "success" &&
+                  budgetOptimizationResult ? (
+                    <View style={styles.budgetOptimizationPanel}>
+                      <Text style={styles.budgetOptimizationTitle}>
+                        Optimized budget plan
+                      </Text>
+                      <Text style={styles.budgetOptimizationMeta}>
+                        {budgetOptimizationResult.destination} - {EURO}
+                        {budgetOptimizationResult.total_budget} EUR
+                      </Text>
+                      <View style={styles.recommendationList}>
+                        {budgetOptimizationResult.recommendations.map(
+                          (item, index) => (
+                            <View
+                              key={`${item.category}-${index}`}
+                              style={styles.recommendationItem}
+                            >
+                              <View style={styles.recommendationHeader}>
+                                <Text style={styles.recommendationCategory}>
+                                  {item.category}
+                                </Text>
+                                <Text style={styles.recommendationCost}>
+                                  {item.estimated_cost}
+                                </Text>
+                              </View>
+                              <Text style={styles.recommendationText}>
+                                {item.recommendation}
+                              </Text>
+                            </View>
+                          )
+                        )}
+                      </View>
+                    </View>
+                  ) : null}
 
                   <ItineraryTimeline
                     days={itineraryResult.days}
@@ -764,6 +921,112 @@ const styles = StyleSheet.create({
     minHeight: 40,
     paddingHorizontal: spacing.md,
     paddingVertical: 10,
+  },
+  budgetActions: {
+    alignItems: "flex-start",
+    marginBottom: spacing.lg,
+  },
+  optimizeBudgetButton: {
+    minHeight: 42,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+  },
+  budgetFeedbackPanel: {
+    alignItems: "center",
+    backgroundColor: colors.teal50,
+    borderColor: colors.teal200,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  budgetFeedbackText: {
+    color: colors.teal700,
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 18,
+  },
+  budgetErrorPanel: {
+    alignItems: "center",
+    backgroundColor: colors.red50,
+    borderColor: colors.redBorder,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  budgetErrorText: {
+    color: colors.red700,
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 18,
+  },
+  budgetOptimizationPanel: {
+    backgroundColor: colors.sky50,
+    borderColor: "#bae6fd",
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+    padding: spacing.lg,
+  },
+  budgetOptimizationTitle: {
+    color: colors.slate900,
+    fontSize: 15,
+    fontWeight: "800",
+    lineHeight: 20,
+  },
+  budgetOptimizationMeta: {
+    color: colors.slate500,
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 17,
+    marginTop: -spacing.sm,
+  },
+  recommendationList: {
+    gap: spacing.sm,
+  },
+  recommendationItem: {
+    backgroundColor: colors.white,
+    borderColor: colors.slate100,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    padding: spacing.md,
+  },
+  recommendationHeader: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: spacing.sm,
+    justifyContent: "space-between",
+    marginBottom: spacing.xs,
+  },
+  recommendationCategory: {
+    color: colors.slate900,
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "800",
+    lineHeight: 18,
+  },
+  recommendationCost: {
+    color: colors.teal700,
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 18,
+    textAlign: "right",
+  },
+  recommendationText: {
+    color: colors.slate600,
+    fontSize: 13,
+    fontWeight: "600",
+    lineHeight: 19,
   },
   resultText: {
     color: colors.slate700,

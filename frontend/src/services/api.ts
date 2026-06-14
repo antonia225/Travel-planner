@@ -346,6 +346,7 @@ export function generateItinerary(
 }
 
 export function optimizeBudget(
+  token: string,
   destination: string,
   budget: number
 ): Promise<BudgetOptimizerResponse> {
@@ -355,7 +356,7 @@ export function optimizeBudget(
       method: "POST",
       body: JSON.stringify({ destination, budget }),
     },
-    null,
+    token,
     AI_REQUEST_TIMEOUT_MS
   );
 }
