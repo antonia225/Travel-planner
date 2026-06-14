@@ -15,6 +15,7 @@ import {
   ArrowLeft,
   CalendarDays,
   Check,
+  Clock3,
   Edit3,
   Eye,
   FolderOpen,
@@ -46,22 +47,6 @@ type Props = {
   };
 };
 
-function getTripSummary(trip: SavedTrip) {
-  const destination = trip.trip_data.destination || "Generated trip";
-  const days = Array.isArray(trip.trip_data.days)
-    ? trip.trip_data.days.length
-    : 0;
-  const dateRange = getTripDateRange(trip);
-
-  if (days > 0) {
-    return `${destination} - ${days} ${days === 1 ? "day" : "days"}${
-      dateRange ? ` - ${dateRange}` : ""
-    }`;
-  }
-
-  return destination;
-}
-
 function parseLocalDate(value: string) {
   const [year, month, day] = value.split("-").map(Number);
   return new Date(year, month - 1, day);
@@ -79,7 +64,11 @@ function formatTripDate(value?: string | null) {
   });
 }
 
-function getTripDateRange(trip: SavedTrip) {
+export function getTripDestination(trip: SavedTrip) {
+  return trip.trip_data.destination || "Generated trip";
+}
+
+export function getTripDateRange(trip: SavedTrip) {
   const startDate = formatTripDate(
     typeof trip.trip_data.start_date === "string" ? trip.trip_data.start_date : null
   );
@@ -92,6 +81,43 @@ function getTripDateRange(trip: SavedTrip) {
   }
 
   return startDate ?? endDate;
+}
+
+function countDaysFromDates(trip: SavedTrip) {
+  const startDate =
+    typeof trip.trip_data.start_date === "string"
+      ? parseLocalDate(trip.trip_data.start_date)
+      : null;
+  const endDate =
+    typeof trip.trip_data.end_date === "string"
+      ? parseLocalDate(trip.trip_data.end_date)
+      : null;
+
+  if (!startDate || !endDate) {
+    return null;
+  }
+
+  const diffMs = endDate.getTime() - startDate.getTime();
+  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
+
+  return days > 0 ? days : null;
+}
+
+export function getTripDurationLabel(trip: SavedTrip) {
+  const days = Array.isArray(trip.trip_data.days)
+    ? trip.trip_data.days.length
+    : countDaysFromDates(trip);
+
+  if (!days) {
+    return "Unknown duration";
+  }
+
+  return `${days} ${days === 1 ? "day" : "days"}`;
+}
+
+export function getTripDisplayTitle(trip: SavedTrip) {
+  const dateRange = getTripDateRange(trip);
+  return dateRange ? `${trip.name} • ${dateRange}` : trip.name;
 }
 
 function sumTripActivityCosts(trip: SavedTrip | null) {
@@ -214,29 +240,37 @@ export default function LibraryScreen({ navigation }: Props) {
   };
 
   const confirmDelete = (trip: SavedTrip) => {
-    Alert.alert("Delete saved trip?", `"${trip.name}" will be removed from your library.`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          if (!token) {
-            return;
-          }
+    Alert.alert(
+      "Delete saved trip?",
+      `"${getTripDisplayTitle(trip)}" will be removed from your library.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            if (!token) {
+              return;
+            }
 
-          try {
-            await deleteSavedTrip(token, trip.id);
-            setSavedTrips((trips) => trips.filter((item) => item.id !== trip.id));
-            setSelectedTrip((selected) => (selected?.id === trip.id ? null : selected));
-          } catch (error) {
-            Alert.alert(
-              "Could not delete trip",
-              error instanceof Error ? error.message : "Something went wrong."
-            );
-          }
+            try {
+              await deleteSavedTrip(token, trip.id);
+              setSavedTrips((trips) =>
+                trips.filter((item) => item.id !== trip.id)
+              );
+              setSelectedTrip((selected) =>
+                selected?.id === trip.id ? null : selected
+              );
+            } catch (error) {
+              Alert.alert(
+                "Could not delete trip",
+                error instanceof Error ? error.message : "Something went wrong."
+              );
+            }
+          },
         },
-      },
-    ]);
+      ]
+    );
   };
 
   return (
@@ -298,8 +332,32 @@ export default function LibraryScreen({ navigation }: Props) {
                 <MapPin color={colors.teal700} size={20} strokeWidth={2.4} />
               </View>
               <View style={styles.tripCopy}>
-                <Text style={styles.tripName}>{trip.name}</Text>
-                <Text style={styles.tripSummary}>{getTripSummary(trip)}</Text>
+                <Text style={styles.tripName}>{getTripDisplayTitle(trip)}</Text>
+                <Text style={styles.tripDestination}>
+                  {getTripDestination(trip)}
+                </Text>
+                <View style={styles.tripMetaRow}>
+                  <View style={styles.tripMetaChip}>
+                    <CalendarDays
+                      color={colors.teal700}
+                      size={14}
+                      strokeWidth={2.4}
+                    />
+                    <Text style={styles.tripMetaText}>
+                      {getTripDateRange(trip) || "Dates not set"}
+                    </Text>
+                  </View>
+                  <View style={styles.tripMetaChip}>
+                    <Clock3
+                      color={colors.teal700}
+                      size={14}
+                      strokeWidth={2.4}
+                    />
+                    <Text style={styles.tripMetaText}>
+                      {getTripDurationLabel(trip)}
+                    </Text>
+                  </View>
+                </View>
                 <View style={styles.updatedRow}>
                   <CalendarDays
                     color={colors.slate400}
@@ -348,7 +406,9 @@ export default function LibraryScreen({ navigation }: Props) {
           <View style={styles.modalHeader}>
             <View style={styles.modalTitleWrap}>
               <Text style={styles.modalKicker}>Saved trip</Text>
-              <Text style={styles.modalTitle}>{selectedTrip?.name}</Text>
+              <Text style={styles.modalTitle}>
+                {selectedTrip ? getTripDisplayTitle(selectedTrip) : ""}
+              </Text>
             </View>
             <TouchableOpacity
               style={styles.closeButton}
@@ -559,12 +619,35 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     lineHeight: 23,
   },
-  tripSummary: {
+  tripDestination: {
     color: colors.slate600,
     fontSize: 14,
     fontWeight: "600",
     lineHeight: 20,
     marginTop: 4,
+  },
+  tripMetaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  tripMetaChip: {
+    alignItems: "center",
+    backgroundColor: colors.teal50,
+    borderColor: colors.teal200,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  tripMetaText: {
+    color: colors.teal700,
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 16,
   },
   updatedRow: {
     alignItems: "center",
