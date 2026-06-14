@@ -25,6 +25,7 @@ import {
 import { useFocusEffect } from "@react-navigation/native";
 
 import AppCard from "../components/AppCard";
+import BudgetOptimizationSummary from "../components/BudgetOptimizationSummary";
 import CustomInput from "../components/CustomInput";
 import ItineraryBudgetSummary from "../components/ItineraryBudgetSummary";
 import ItineraryTimeline from "../components/ItineraryTimeline";
@@ -35,8 +36,8 @@ import {
   deleteSavedTrip,
   listSavedTrips,
   renameSavedTrip,
-  SavedTrip,
 } from "../services/api";
+import type { BudgetOptimizerResponse, SavedTrip } from "../services/api";
 import { colors, radius, shadows, spacing } from "../theme/designSystem";
 
 type Props = {
@@ -115,6 +116,12 @@ function getTripBudget(trip: SavedTrip | null) {
   return typeof trip?.trip_data.budget_eur === "number"
     ? trip.trip_data.budget_eur
     : null;
+}
+
+function getTripBudgetOptimization(
+  trip: SavedTrip | null
+): BudgetOptimizerResponse | null {
+  return trip?.trip_data.budget_optimization ?? null;
 }
 
 function formatDate(value: string) {
@@ -364,6 +371,13 @@ export default function LibraryScreen({ navigation }: Props) {
                     totalCostEur={getTripTotalCost(selectedTrip)}
                     budgetEur={getTripBudget(selectedTrip)}
                     currency={selectedTrip.trip_data.currency ?? "EUR"}
+                  />
+                ) : null}
+
+                {getTripBudgetOptimization(selectedTrip) ? (
+                  <BudgetOptimizationSummary
+                    result={getTripBudgetOptimization(selectedTrip)!}
+                    saved
                   />
                 ) : null}
 

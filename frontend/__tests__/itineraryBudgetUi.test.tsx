@@ -1,9 +1,19 @@
 import React from "react";
 import { act, create } from "react-test-renderer";
 
+jest.mock("@react-native-async-storage/async-storage", () =>
+  require("@react-native-async-storage/async-storage/jest/async-storage-mock")
+);
+
 import ItineraryBudgetSummary from "../src/components/ItineraryBudgetSummary";
 import ItineraryTimeline from "../src/components/ItineraryTimeline";
+import BudgetOptimizationSummary from "../src/components/BudgetOptimizationSummary";
 import TripSearchForm from "../src/components/TripSearchForm";
+import {
+  buildTripDataToSave,
+  selectMostExpensiveBudgetActivities,
+} from "../src/screens/HomeScreen";
+import { optimizeBudget, saveGeneratedTrip } from "../src/services/api";
 
 const EURO = "\u20ac";
 
@@ -91,5 +101,220 @@ describe("itinerary budget UI", () => {
 
     expect(visibleText).toContain("Activities total cost");
     expect(visibleText).toContain(`${EURO}245 of ${EURO}800 budget EUR`);
+  });
+
+  it("selects the three most expensive paid activities", () => {
+    const activities = selectMostExpensiveBudgetActivities([
+      {
+        day_number: 1,
+        activities: [
+          {
+            title: "Museum",
+            description: "Paid entry",
+            time_slot: "09:00 - 11:00",
+            estimated_cost_eur: 20,
+          },
+          {
+            title: "Free walk",
+            description: "Self-guided walk",
+            time_slot: "12:00 - 13:00",
+            estimated_cost_eur: 0,
+          },
+          {
+            title: "Dinner",
+            description: "Restaurant dinner",
+            time_slot: "19:00 - 21:00",
+            estimated_cost_eur: 55,
+          },
+        ],
+      },
+      {
+        day_number: 2,
+        activities: [
+          {
+            title: "Boat tour",
+            description: "Harbor tour",
+            time_slot: "10:00 - 12:00",
+            estimated_cost_eur: 70,
+          },
+          {
+            title: "Cooking class",
+            description: "Local class",
+            time_slot: "15:00 - 17:00",
+            estimated_cost_eur: 85,
+          },
+          {
+            title: "Park",
+            description: "Relax outside",
+            time_slot: "18:00 - 19:00",
+          },
+        ],
+      },
+    ]);
+
+    expect(activities.map((activity) => activity.title)).toEqual([
+      "Cooking class",
+      "Boat tour",
+      "Dinner",
+    ]);
+  });
+
+  it("returns no optimizable activities when every activity is free", () => {
+    const activities = selectMostExpensiveBudgetActivities([
+      {
+        day_number: 1,
+        activities: [
+          {
+            title: "Park walk",
+            description: "Walk through the park",
+            time_slot: "09:00 - 10:00",
+            estimated_cost_eur: 0,
+          },
+        ],
+      },
+    ]);
+
+    expect(activities).toEqual([]);
+  });
+
+  it("sends expensive activities to the budget optimizer endpoint", async () => {
+    const mockFetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        destination: "Rome",
+        total_budget: 1000,
+        total_estimated_savings_eur: 40,
+        recommendations: [
+          {
+            original_activity: "Rooftop dinner",
+            original_cost_eur: 70,
+            suggested_alternative: "Choose a neighborhood trattoria.",
+            estimated_alternative_cost_eur: 30,
+            estimated_savings_eur: 40,
+            reason: "Lower menu prices with a local meal.",
+          },
+        ],
+      }),
+    });
+    const originalFetch = global.fetch;
+    global.fetch = mockFetch as unknown as typeof fetch;
+
+    try {
+      await optimizeBudget("token", "Rome", 1000, [
+        {
+          title: "Rooftop dinner",
+          description: "Dinner with a view.",
+          time_slot: "19:00 - 21:00",
+          day_number: 1,
+          estimated_cost_eur: 70,
+        },
+      ]);
+    } finally {
+      global.fetch = originalFetch;
+    }
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining("/optimize-budget"),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          destination: "Rome",
+          budget: 1000,
+          expensive_activities: [
+            {
+              title: "Rooftop dinner",
+              description: "Dinner with a view.",
+              time_slot: "19:00 - 21:00",
+              day_number: 1,
+              estimated_cost_eur: 70,
+            },
+          ],
+        }),
+      })
+    );
+  });
+
+  it("adds budget optimization to the trip data before saving", async () => {
+    const budgetOptimization = {
+      destination: "Rome",
+      total_budget: 1000,
+      total_estimated_savings_eur: 40,
+      recommendations: [
+        {
+          original_activity: "Rooftop dinner",
+          original_cost_eur: 70,
+          suggested_alternative: "Choose a neighborhood trattoria.",
+          estimated_alternative_cost_eur: 30,
+          estimated_savings_eur: 40,
+          reason: "Lower menu prices with a local meal.",
+        },
+      ],
+    };
+    const tripData = buildTripDataToSave(
+      {
+        destination: "Rome",
+        budget_eur: 1000,
+        days: [],
+      },
+      budgetOptimization
+    );
+    const mockFetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: async () => ({
+        id: 1,
+        user_id: 1,
+        name: "Rome trip",
+        trip_data: tripData,
+        created_at: "2026-06-14T12:00:00",
+        updated_at: "2026-06-14T12:00:00",
+      }),
+    });
+    const originalFetch = global.fetch;
+    global.fetch = mockFetch as unknown as typeof fetch;
+
+    try {
+      await saveGeneratedTrip("token", "Rome trip", tripData);
+    } finally {
+      global.fetch = originalFetch;
+    }
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.tripData.budget_optimization.total_estimated_savings_eur).toBe(40);
+    expect(body.tripData.budget_optimization.recommendations[0].original_activity).toBe(
+      "Rooftop dinner"
+    );
+  });
+
+  it("renders estimated savings before and after saving", () => {
+    const tree = renderToJson(
+      <BudgetOptimizationSummary
+        saved
+        result={{
+          destination: "Rome",
+          total_budget: 1000,
+          total_estimated_savings_eur: 40,
+          recommendations: [
+            {
+              original_activity: "Rooftop dinner",
+              original_cost_eur: 70,
+              suggested_alternative: "Choose a neighborhood trattoria.",
+              estimated_alternative_cost_eur: 30,
+              estimated_savings_eur: 40,
+              reason: "Lower menu prices with a local meal.",
+            },
+          ],
+        }}
+      />
+    );
+
+    const visibleText = collectText(tree).join("");
+
+    expect(visibleText).toContain("Estimated savings");
+    expect(visibleText).toContain(`Save${EURO}40`);
+    expect(visibleText).toContain("Rooftop dinner");
+    expect(visibleText).toContain("Choose a neighborhood trattoria.");
+    expect(visibleText).toContain("Budget suggestions saved with this trip.");
   });
 });

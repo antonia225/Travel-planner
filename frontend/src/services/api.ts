@@ -21,6 +21,7 @@ export const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? autoDetectedBaseUrl;
 
 const REQUEST_TIMEOUT_MS = 30_000;
 const AI_REQUEST_TIMEOUT_MS = 10 * 60_000;
+const BUDGET_OPTIMIZER_TIMEOUT_MS = 90_000;
 
 export type Activity = {
   title: string;
@@ -77,19 +78,35 @@ export type GeneratedTripData = {
   start_date?: string | null;
   end_date?: string | null;
   budget_eur?: number | null;
+  budget_optimization?: BudgetOptimizerResponse | null;
   [key: string]: unknown;
 };
 
 export type BudgetRecommendation = {
-  category: string;
-  recommendation: string;
-  estimated_cost: string;
+  category?: string | null;
+  recommendation?: string | null;
+  estimated_cost?: string | null;
+  original_activity?: string | null;
+  original_cost_eur?: number | null;
+  suggested_alternative?: string | null;
+  estimated_alternative_cost_eur?: number | null;
+  estimated_savings_eur?: number | null;
+  reason?: string | null;
 };
 
 export type BudgetOptimizerResponse = {
   destination: string;
   total_budget: number;
+  total_estimated_savings_eur?: number | null;
   recommendations: BudgetRecommendation[];
+};
+
+export type BudgetOptimizerActivity = {
+  title: string;
+  description: string;
+  time_slot: string;
+  day_number: number;
+  estimated_cost_eur: number;
 };
 
 export type InterestCategoriesResponse = {
@@ -346,17 +363,28 @@ export function generateItinerary(
 }
 
 export function optimizeBudget(
+  token: string,
   destination: string,
-  budget: number
+  budget: number,
+  expensiveActivities?: BudgetOptimizerActivity[]
 ): Promise<BudgetOptimizerResponse> {
+  const hasExpensiveActivities =
+    Array.isArray(expensiveActivities) && expensiveActivities.length > 0;
+
   return fetchJson<BudgetOptimizerResponse>(
     "/optimize-budget",
     {
       method: "POST",
-      body: JSON.stringify({ destination, budget }),
+      body: JSON.stringify({
+        destination,
+        budget,
+        ...(hasExpensiveActivities
+          ? { expensive_activities: expensiveActivities }
+          : {}),
+      }),
     },
-    null,
-    AI_REQUEST_TIMEOUT_MS
+    token,
+    hasExpensiveActivities ? BUDGET_OPTIMIZER_TIMEOUT_MS : AI_REQUEST_TIMEOUT_MS
   );
 }
 

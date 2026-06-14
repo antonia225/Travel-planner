@@ -308,6 +308,7 @@ def test_successful_budget_optimization_creates_budget_agent_log(
     response = client.post(
         "/optimize-budget",
         json={"destination": "Rome", "budget": 1000},
+        headers=_register_and_login(client, "budget-success@example.com"),
     )
 
     assert response.status_code == 200
@@ -335,6 +336,7 @@ def test_failed_budget_optimization_creates_budget_agent_alert_log(
     response = client.post(
         "/optimize-budget",
         json={"destination": "Rome", "budget": 1000},
+        headers=_register_and_login(client, "budget-failure@example.com"),
     )
 
     assert response.status_code == 422

@@ -53,7 +53,7 @@ from schemas.saved_trip import (
     SaveGeneratedTripRequest,
     SavedTripResponse,
 )
-from schemas.budget import BudgetOptimizerResponse
+from schemas.budget import BudgetOptimizerRequest, BudgetOptimizerResponse
 from schemas.itinerary import (
     ItineraryResponse,
     RegenerateActivityRequest,
@@ -457,11 +457,6 @@ class ItineraryRequest(BaseModel):
     budget: int | None = None
 
 
-class BudgetOptimizerRequest(BaseModel):
-    destination: str
-    budget: int
-
-
 @app.post("/generate-itinerary", response_model=ItineraryResponse)
 async def create_itinerary(
     payload: ItineraryRequest,
@@ -489,12 +484,14 @@ async def create_itinerary(
 @app.post("/optimize-budget", response_model=BudgetOptimizerResponse)
 async def optimize_budget(
     payload: BudgetOptimizerRequest,
+    _: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> BudgetOptimizerResponse:
     try:
         return await generate_budget_plan(
             destination=payload.destination,
             budget=payload.budget,
+            expensive_activities=payload.expensive_activities,
             db=db,
         )
     except ValueError as exc:
