@@ -25,7 +25,6 @@ import {
 import { useFocusEffect } from "@react-navigation/native";
 
 import AppCard from "../components/AppCard";
-import BudgetOptimizationSummary from "../components/BudgetOptimizationSummary";
 import CustomInput from "../components/CustomInput";
 import ItineraryBudgetSummary from "../components/ItineraryBudgetSummary";
 import ItineraryTimeline from "../components/ItineraryTimeline";
@@ -39,6 +38,7 @@ import {
 } from "../services/api";
 import type { BudgetOptimizerResponse, SavedTrip } from "../services/api";
 import { colors, radius, shadows, spacing } from "../theme/designSystem";
+import { getVisibleBudgetOptimizationSavings } from "../utils/budgetOptimization";
 
 type Props = {
   navigation: {
@@ -371,17 +371,17 @@ export default function LibraryScreen({ navigation }: Props) {
                     totalCostEur={getTripTotalCost(selectedTrip)}
                     budgetEur={getTripBudget(selectedTrip)}
                     currency={selectedTrip.trip_data.currency ?? "EUR"}
+                    estimatedSavingsEur={getVisibleBudgetOptimizationSavings(
+                      selectedTrip.trip_data.days,
+                      getTripBudgetOptimization(selectedTrip)
+                    )}
                   />
                 ) : null}
 
-                {getTripBudgetOptimization(selectedTrip) ? (
-                  <BudgetOptimizationSummary
-                    result={getTripBudgetOptimization(selectedTrip)!}
-                    saved
-                  />
-                ) : null}
-
-                <ItineraryTimeline days={selectedTrip.trip_data.days} />
+                <ItineraryTimeline
+                  days={selectedTrip.trip_data.days}
+                  budgetOptimization={getTripBudgetOptimization(selectedTrip)}
+                />
               </>
             ) : (
               <AppCard>

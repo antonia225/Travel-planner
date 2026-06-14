@@ -29,6 +29,8 @@ type TripSearchData = {
 
 type Props = {
   onSubmit?: (data: TripSearchData) => void;
+  isSubmitting?: boolean;
+  onCancel?: () => void;
 };
 
 type DateField = "startDate" | "endDate";
@@ -114,7 +116,11 @@ function getCalendarDays(displayedMonth: Date) {
   return days;
 }
 
-export default function TripSearchForm({ onSubmit }: Props) {
+export default function TripSearchForm({
+  onSubmit,
+  isSubmitting = false,
+  onCancel,
+}: Props) {
   const today = useMemo(() => new Date(), []);
   const defaultStartDate = useMemo(() => addDays(today, 1), [today]);
 
@@ -286,12 +292,26 @@ export default function TripSearchForm({ onSubmit }: Props) {
         />
       </View>
 
-      <PrimaryButton
-        title="Generate Trip"
-        icon={<Sparkles color={colors.white} size={18} strokeWidth={2.4} />}
-        onPress={handleSubmit}
-        style={styles.submitButton}
-      />
+      <View style={styles.submitRow}>
+        <PrimaryButton
+          title={isSubmitting ? "Generating itinerary" : "Generate itinerary"}
+          loading={isSubmitting}
+          disabled={isSubmitting}
+          fullWidth={false}
+          icon={<Sparkles color={colors.white} size={18} strokeWidth={2.4} />}
+          onPress={handleSubmit}
+          style={styles.submitButton}
+        />
+        {isSubmitting ? (
+          <PrimaryButton
+            title="Cancel"
+            variant="destructive"
+            fullWidth={false}
+            onPress={onCancel}
+            style={styles.cancelSubmitButton}
+          />
+        ) : null}
+      </View>
 
       <Modal
         visible={activeDateField !== null}
@@ -450,9 +470,19 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: 6,
   },
-  submitButton: {
+  submitRow: {
+    alignItems: "stretch",
+    flexDirection: "row",
+    gap: spacing.md,
     marginTop: spacing.xs,
+  },
+  submitButton: {
+    flex: 1,
     minHeight: 56,
+  },
+  cancelSubmitButton: {
+    minHeight: 56,
+    minWidth: 96,
   },
   modalOverlay: {
     alignItems: "center",

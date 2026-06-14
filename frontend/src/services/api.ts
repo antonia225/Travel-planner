@@ -253,7 +253,19 @@ async function fetchJson<T>(
   timeoutMs = REQUEST_TIMEOUT_MS
 ): Promise<T> {
   const controller = new AbortController();
-  const timerId = setTimeout(() => controller.abort(), timeoutMs);
+  const externalSignal = options.signal;
+  let didTimeout = false;
+  const timerId = setTimeout(() => {
+    didTimeout = true;
+    controller.abort();
+  }, timeoutMs);
+  const abortFromExternalSignal = () => controller.abort();
+
+  if (externalSignal?.aborted) {
+    controller.abort();
+  } else {
+    externalSignal?.addEventListener("abort", abortFromExternalSignal);
+  }
 
   try {
     const response = await fetch(`${BASE_URL}${path}`, {
@@ -279,11 +291,15 @@ async function fetchJson<T>(
     return (await response.json()) as T;
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
+      if (externalSignal?.aborted && !didTimeout) {
+        throw error;
+      }
       throw new Error("Request timed out. Please try again.");
     }
     throw error;
   } finally {
     clearTimeout(timerId);
+    externalSignal?.removeEventListener("abort", abortFromExternalSignal);
   }
 }
 
@@ -349,12 +365,14 @@ export function listInterestCategories(): Promise<InterestCategoriesResponse> {
 export function generateItinerary(
   token: string,
   destination: string,
-  numDays: number
+  numDays: number,
+  signal?: AbortSignal
 ): Promise<ItineraryResponse> {
   return fetchJson<ItineraryResponse>(
     "/generate-itinerary",
     {
       method: "POST",
+      signal,
       body: JSON.stringify({ destination, num_days: numDays }),
     },
     token,
@@ -366,7 +384,8 @@ export function optimizeBudget(
   token: string,
   destination: string,
   budget: number,
-  expensiveActivities?: BudgetOptimizerActivity[]
+  expensiveActivities?: BudgetOptimizerActivity[],
+  signal?: AbortSignal
 ): Promise<BudgetOptimizerResponse> {
   const hasExpensiveActivities =
     Array.isArray(expensiveActivities) && expensiveActivities.length > 0;
@@ -375,6 +394,7 @@ export function optimizeBudget(
     "/optimize-budget",
     {
       method: "POST",
+      signal,
       body: JSON.stringify({
         destination,
         budget,
@@ -390,12 +410,14 @@ export function optimizeBudget(
 
 export async function regenerateActivity(
   token: string,
-  payload: RegenerateActivityRequest
+  payload: RegenerateActivityRequest,
+  signal?: AbortSignal
 ): Promise<Activity> {
   const response = await fetchJson<RegenerateActivityResponse>(
     "/itinerary/regenerate-activity",
     {
       method: "POST",
+      signal,
       body: JSON.stringify(payload),
     },
     token,

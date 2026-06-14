@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -23,7 +23,6 @@ import {
 } from "lucide-react-native";
 
 import AppCard from "../components/AppCard";
-import BudgetOptimizationSummary from "../components/BudgetOptimizationSummary";
 import ItineraryBudgetSummary from "../components/ItineraryBudgetSummary";
 import ItineraryTimeline from "../components/ItineraryTimeline";
 import PrimaryButton from "../components/PrimaryButton";
@@ -44,6 +43,10 @@ import type {
   ItineraryResponse,
 } from "../services/api";
 import { colors, radius, shadows, spacing } from "../theme/designSystem";
+import {
+  getVisibleBudgetOptimizationSavings,
+  removeBudgetRecommendationForActivity,
+} from "../utils/budgetOptimization";
 
 const EURO = "\u20ac";
 
@@ -111,6 +114,10 @@ function getErrorMessage(error: unknown) {
   }
 
   return "Something went wrong.";
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof Error && error.name === "AbortError";
 }
 
 function formatBackendDetail(detail: unknown) {
@@ -240,8 +247,23 @@ export default function HomeScreen({ navigation }: Props) {
   const [budgetOptimizationError, setBudgetOptimizationError] = useState<
     string | null
   >(null);
+  const tripGenerationControllerRef = useRef<AbortController | null>(null);
+  const budgetOptimizationControllerRef = useRef<AbortController | null>(null);
+  const activityRegenerationControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => {
+      tripGenerationControllerRef.current?.abort();
+      budgetOptimizationControllerRef.current?.abort();
+      activityRegenerationControllerRef.current?.abort();
+    };
+  }, []);
 
   const handleTripSearch = async (tripData: TripSearchData) => {
+    if (isGeneratingTrip) {
+      return;
+    }
+
     if (!token) {
       const message = "Please log in again before generating a trip.";
       setTripError(message);
@@ -258,15 +280,13 @@ export default function HomeScreen({ navigation }: Props) {
       return;
     }
 
+    const controller = new AbortController();
+    tripGenerationControllerRef.current = controller;
+
     try {
       setIsGeneratingTrip(true);
-      setItineraryResult(null);
-      setActivityBudgetEur(null);
-      setSavedTripId(null);
       setTripError(null);
       setActivityErrors({});
-      setBudgetOptimizationStatus("idle");
-      setBudgetOptimizationResult(null);
       setBudgetOptimizationError(null);
 
       console.log("Sending trip data to backend:", {
@@ -284,6 +304,7 @@ export default function HomeScreen({ navigation }: Props) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
+        signal: controller.signal,
         body: JSON.stringify({
           destination: tripData.destination,
           num_days: numDays,
@@ -317,6 +338,10 @@ export default function HomeScreen({ navigation }: Props) {
 
       console.log("AI itinerary result:", result);
       const generatedItinerary = result as ItineraryResult;
+      if (controller.signal.aborted) {
+        return;
+      }
+
       const enrichedItinerary: ItineraryResult = {
         ...generatedItinerary,
         start_date: generatedItinerary.start_date ?? tripData.startDate,
@@ -328,15 +353,31 @@ export default function HomeScreen({ navigation }: Props) {
 
       setItineraryResult(enrichedItinerary);
       setActivityBudgetEur(tripData.budget);
-      Alert.alert("Success", "AI itinerary generated.");
+      setSavedTripId(null);
+      setBudgetOptimizationStatus("idle");
+      setBudgetOptimizationResult(null);
+      setBudgetOptimizationError(null);
     } catch (error) {
+      if (isAbortError(error)) {
+        return;
+      }
+
       const message = getErrorMessage(error);
       console.log("Trip search failed:", error);
       setTripError(message);
       Alert.alert("Could not connect to backend", message);
     } finally {
-      setIsGeneratingTrip(false);
+      if (tripGenerationControllerRef.current === controller) {
+        tripGenerationControllerRef.current = null;
+        setIsGeneratingTrip(false);
+      }
     }
+  };
+
+  const handleCancelTripGeneration = () => {
+    tripGenerationControllerRef.current?.abort();
+    tripGenerationControllerRef.current = null;
+    setIsGeneratingTrip(false);
   };
 
   const handleSaveGeneratedTrip = async () => {
@@ -402,9 +443,11 @@ export default function HomeScreen({ navigation }: Props) {
       return;
     }
 
+    const controller = new AbortController();
+    budgetOptimizationControllerRef.current = controller;
+
     try {
       setBudgetOptimizationStatus("loading");
-      setBudgetOptimizationResult(null);
       setBudgetOptimizationError(null);
 
       const expensiveActivities = selectMostExpensiveBudgetActivities(
@@ -423,8 +466,13 @@ export default function HomeScreen({ navigation }: Props) {
         token,
         destination,
         budgetEur,
-        expensiveActivities
+        expensiveActivities,
+        controller.signal
       );
+
+      if (controller.signal.aborted) {
+        return;
+      }
 
       setBudgetOptimizationResult(result);
       setBudgetOptimizationStatus("success");
@@ -438,11 +486,28 @@ export default function HomeScreen({ navigation }: Props) {
       );
       setSavedTripId(null);
     } catch (error) {
+      if (isAbortError(error)) {
+        return;
+      }
+
       const message = getErrorMessage(error);
-      setBudgetOptimizationResult(null);
       setBudgetOptimizationStatus("error");
       setBudgetOptimizationError(message);
+    } finally {
+      if (budgetOptimizationControllerRef.current === controller) {
+        budgetOptimizationControllerRef.current = null;
+      }
     }
+  };
+
+  const handleCancelBudgetOptimization = () => {
+    budgetOptimizationControllerRef.current?.abort();
+    budgetOptimizationControllerRef.current = null;
+    setBudgetOptimizationStatus(
+      budgetOptimizationResult || itineraryResult?.budget_optimization
+        ? "success"
+        : "idle"
+    );
   };
 
   const handleRegenerateActivity = async (
@@ -477,6 +542,8 @@ export default function HomeScreen({ navigation }: Props) {
       typeof budgetEur === "number" ? Math.max(budgetEur - currentTotal, 0) : null;
     const maxReplacementCostEur =
       remainingBudget === null ? undefined : oldActivityCost + remainingBudget;
+    const controller = new AbortController();
+    activityRegenerationControllerRef.current = controller;
 
     try {
       setRegeneratingActivityKey(activityKey);
@@ -486,25 +553,40 @@ export default function HomeScreen({ navigation }: Props) {
         return next;
       });
 
-      const replacement = await regenerateActivity(token, {
-        destination,
-        dayIndex,
-        activityIndex,
-        oldActivity: activity as Activity,
-        itinerary: {
+      const replacement = await regenerateActivity(
+        token,
+        {
           destination,
-          days: itineraryResult.days,
-        } as ItineraryResponse,
-        userPreferences: {
-          interests: user?.interests ?? [],
+          dayIndex,
+          activityIndex,
+          oldActivity: activity as Activity,
+          itinerary: {
+            destination,
+            days: itineraryResult.days,
+          } as ItineraryResponse,
+          userPreferences: {
+            interests: user?.interests ?? [],
+          },
+          constraints: {
+            preserveExactTimeSlot: activity.time_slot,
+            currentTotalCostEur: currentTotal,
+            budgetEur,
+            maxReplacementCostEur,
+          },
         },
-        constraints: {
-          preserveExactTimeSlot: activity.time_slot,
-          currentTotalCostEur: currentTotal,
-          budgetEur,
-          maxReplacementCostEur,
-        },
-      });
+        controller.signal
+      );
+
+      if (controller.signal.aborted) {
+        return;
+      }
+
+      const nextBudgetOptimization = removeBudgetRecommendationForActivity(
+        itineraryResult.days,
+        currentBudgetOptimization,
+        dayIndex,
+        activityIndex
+      );
 
       setItineraryResult((current) => {
         if (!current?.days) {
@@ -527,7 +609,7 @@ export default function HomeScreen({ navigation }: Props) {
 
         return {
           ...current,
-          budget_optimization: null,
+          budget_optimization: nextBudgetOptimization,
           destination,
           currency: current.currency ?? "EUR",
           total_estimated_cost_eur: sumActivityCosts(updatedDays),
@@ -539,24 +621,44 @@ export default function HomeScreen({ navigation }: Props) {
         delete next[activityKey];
         return next;
       });
-      setBudgetOptimizationStatus("idle");
-      setBudgetOptimizationResult(null);
+      setBudgetOptimizationStatus(nextBudgetOptimization ? "success" : "idle");
+      setBudgetOptimizationResult(nextBudgetOptimization);
       setBudgetOptimizationError(null);
       setSavedTripId(null);
     } catch (error) {
+      if (isAbortError(error)) {
+        return;
+      }
+
       setActivityErrors((current) => ({
         ...current,
         [activityKey]: getErrorMessage(error),
       }));
     } finally {
-      setRegeneratingActivityKey(null);
+      if (activityRegenerationControllerRef.current === controller) {
+        activityRegenerationControllerRef.current = null;
+        setRegeneratingActivityKey(null);
+      }
     }
+  };
+
+  const handleCancelRegenerateActivity = () => {
+    activityRegenerationControllerRef.current?.abort();
+    activityRegenerationControllerRef.current = null;
+    setRegeneratingActivityKey(null);
   };
 
   const displayedActivityTotal =
     itineraryResult?.total_estimated_cost_eur ?? sumActivityCosts(itineraryResult?.days);
   const currency = itineraryResult?.currency ?? "EUR";
   const isOptimizingBudget = budgetOptimizationStatus === "loading";
+  const currentBudgetOptimization =
+    budgetOptimizationResult ?? itineraryResult?.budget_optimization ?? null;
+  const currentEstimatedSavings =
+    getVisibleBudgetOptimizationSavings(
+      itineraryResult?.days,
+      currentBudgetOptimization
+    );
 
   if (isLoading) {
     return (
@@ -646,17 +748,11 @@ export default function HomeScreen({ navigation }: Props) {
         </View>
 
         <View style={styles.contentSheet}>
-          <TripSearchForm onSubmit={handleTripSearch} />
-
-          {isGeneratingTrip ? (
-            <AppCard elevated style={styles.feedbackCard}>
-              <ActivityIndicator size="large" color={colors.teal600} />
-              <Text style={styles.feedbackTitle}>Generating itinerary...</Text>
-              <Text style={styles.feedbackText}>
-                The planner is building your daily schedule.
-              </Text>
-            </AppCard>
-          ) : null}
+          <TripSearchForm
+            isSubmitting={isGeneratingTrip}
+            onCancel={handleCancelTripGeneration}
+            onSubmit={handleTripSearch}
+          />
 
           {tripError ? (
             <View style={styles.errorCard}>
@@ -706,20 +802,22 @@ export default function HomeScreen({ navigation }: Props) {
                 <>
                   <ItineraryBudgetSummary
                     totalCostEur={displayedActivityTotal}
-                    budgetEur={activityBudgetEur}
+                    budgetEur={itineraryResult.budget_eur ?? activityBudgetEur}
                     currency={currency}
+                    estimatedSavingsEur={currentEstimatedSavings}
                   />
 
                   <View style={styles.budgetActions}>
                     <PrimaryButton
-                      title="Optimize Budget"
+                      title={
+                        isOptimizingBudget ? "Optimizing budget" : "Optimize Budget"
+                      }
                       loading={isOptimizingBudget}
                       disabled={isOptimizingBudget}
                       fullWidth={false}
-                      variant="secondary"
                       icon={
                         <Sparkles
-                          color={colors.teal700}
+                          color={colors.white}
                           size={16}
                           strokeWidth={2.4}
                         />
@@ -727,16 +825,16 @@ export default function HomeScreen({ navigation }: Props) {
                       onPress={handleOptimizeBudget}
                       style={styles.optimizeBudgetButton}
                     />
+                    {isOptimizingBudget ? (
+                      <PrimaryButton
+                        title="Cancel"
+                        fullWidth={false}
+                        variant="destructive"
+                        onPress={handleCancelBudgetOptimization}
+                        style={styles.cancelBudgetButton}
+                      />
+                    ) : null}
                   </View>
-
-                  {isOptimizingBudget ? (
-                    <View style={styles.budgetFeedbackPanel}>
-                      <ActivityIndicator size="small" color={colors.teal600} />
-                      <Text style={styles.budgetFeedbackText}>
-                        Optimizing your budget recommendations...
-                      </Text>
-                    </View>
-                  ) : null}
 
                   {budgetOptimizationStatus === "error" &&
                   budgetOptimizationError ? (
@@ -752,19 +850,13 @@ export default function HomeScreen({ navigation }: Props) {
                     </View>
                   ) : null}
 
-                  {budgetOptimizationStatus === "success" &&
-                  budgetOptimizationResult ? (
-                    <BudgetOptimizationSummary
-                      result={budgetOptimizationResult}
-                      saved={!!savedTripId}
-                    />
-                  ) : null}
-
                   <ItineraryTimeline
                     days={itineraryResult.days}
+                    budgetOptimization={currentBudgetOptimization}
                     regeneratingActivityKey={regeneratingActivityKey}
                     activityErrors={activityErrors}
                     onRegenerateActivity={handleRegenerateActivity}
+                    onCancelRegenerateActivity={handleCancelRegenerateActivity}
                   />
                 </>
               ) : (
@@ -915,23 +1007,6 @@ const styles = StyleSheet.create({
   sectionCard: {
     marginBottom: 0,
   },
-  feedbackCard: {
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  feedbackTitle: {
-    color: colors.slate900,
-    fontSize: 15,
-    fontWeight: "800",
-    marginTop: spacing.sm,
-  },
-  feedbackText: {
-    color: colors.slate500,
-    fontSize: 13,
-    fontWeight: "600",
-    lineHeight: 19,
-    textAlign: "center",
-  },
   errorCard: {
     alignItems: "flex-start",
     backgroundColor: colors.red50,
@@ -964,32 +1039,21 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   budgetActions: {
-    alignItems: "flex-start",
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.md,
     marginBottom: spacing.lg,
   },
   optimizeBudgetButton: {
-    minHeight: 42,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
-  },
-  budgetFeedbackPanel: {
-    alignItems: "center",
-    backgroundColor: colors.teal50,
-    borderColor: colors.teal200,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
+    minHeight: 48,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingVertical: 12,
+    ...shadows.soft,
   },
-  budgetFeedbackText: {
-    color: colors.teal700,
-    flex: 1,
-    fontSize: 13,
-    fontWeight: "700",
-    lineHeight: 18,
+  cancelBudgetButton: {
+    minHeight: 48,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 12,
   },
   budgetErrorPanel: {
     alignItems: "center",
@@ -1009,65 +1073,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     lineHeight: 18,
-  },
-  budgetOptimizationPanel: {
-    backgroundColor: colors.sky50,
-    borderColor: "#bae6fd",
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    gap: spacing.md,
-    marginBottom: spacing.lg,
-    padding: spacing.lg,
-  },
-  budgetOptimizationTitle: {
-    color: colors.slate900,
-    fontSize: 15,
-    fontWeight: "800",
-    lineHeight: 20,
-  },
-  budgetOptimizationMeta: {
-    color: colors.slate500,
-    fontSize: 12,
-    fontWeight: "700",
-    lineHeight: 17,
-    marginTop: -spacing.sm,
-  },
-  recommendationList: {
-    gap: spacing.sm,
-  },
-  recommendationItem: {
-    backgroundColor: colors.white,
-    borderColor: colors.slate100,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    padding: spacing.md,
-  },
-  recommendationHeader: {
-    alignItems: "flex-start",
-    flexDirection: "row",
-    gap: spacing.sm,
-    justifyContent: "space-between",
-    marginBottom: spacing.xs,
-  },
-  recommendationCategory: {
-    color: colors.slate900,
-    flex: 1,
-    fontSize: 13,
-    fontWeight: "800",
-    lineHeight: 18,
-  },
-  recommendationCost: {
-    color: colors.teal700,
-    fontSize: 12,
-    fontWeight: "800",
-    lineHeight: 18,
-    textAlign: "right",
-  },
-  recommendationText: {
-    color: colors.slate600,
-    fontSize: 13,
-    fontWeight: "600",
-    lineHeight: 19,
   },
   resultText: {
     color: colors.slate700,

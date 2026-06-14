@@ -3,24 +3,13 @@ import { StyleSheet, Text, View } from "react-native";
 
 import type { BudgetOptimizerResponse } from "../services/api";
 import { colors, radius, spacing } from "../theme/designSystem";
+import { getBudgetOptimizationSavings } from "../utils/budgetOptimization";
 
 const EURO = "\u20ac";
 
 type Props = {
   result: BudgetOptimizerResponse;
-  saved?: boolean;
 };
-
-function totalSavings(result: BudgetOptimizerResponse) {
-  if (typeof result.total_estimated_savings_eur === "number") {
-    return result.total_estimated_savings_eur;
-  }
-
-  return result.recommendations.reduce(
-    (total, item) => total + (item.estimated_savings_eur ?? 0),
-    0
-  );
-}
 
 function hasActivitySavings(result: BudgetOptimizerResponse) {
   return result.recommendations.some(
@@ -28,9 +17,9 @@ function hasActivitySavings(result: BudgetOptimizerResponse) {
   );
 }
 
-export default function BudgetOptimizationSummary({ result, saved = false }: Props) {
+export default function BudgetOptimizationSummary({ result }: Props) {
   const activitySavings = hasActivitySavings(result);
-  const savings = totalSavings(result);
+  const savings = getBudgetOptimizationSavings(result);
 
   return (
     <View style={styles.panel}>
@@ -55,12 +44,6 @@ export default function BudgetOptimizationSummary({ result, saved = false }: Pro
           </View>
         ) : null}
       </View>
-
-      {saved ? (
-        <View style={styles.savedBadge}>
-          <Text style={styles.savedText}>Budget suggestions saved with this trip.</Text>
-        </View>
-      ) : null}
 
       <View style={styles.list}>
         {result.recommendations.map((item, index) => {
@@ -164,20 +147,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "800",
     lineHeight: 22,
-  },
-  savedBadge: {
-    backgroundColor: colors.teal50,
-    borderColor: colors.teal200,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  savedText: {
-    color: colors.teal700,
-    fontSize: 12,
-    fontWeight: "800",
-    lineHeight: 17,
   },
   list: {
     gap: spacing.sm,
