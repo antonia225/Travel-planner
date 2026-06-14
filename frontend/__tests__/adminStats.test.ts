@@ -1,8 +1,11 @@
-import { getAdminStats } from "../src/services/api";
+import { getAdminAIAgentMetrics, getAdminStats } from "../src/services/api";
 import {
+  buildAIAgentPerformanceMetrics,
   buildAdminUsageMetrics,
+  COLLAPSED_AI_LOG_COUNT,
+  formatAgentResponseTime,
   formatAdminStatValue,
-  getUsageMetricPercent,
+  getVisibleAIAgentLogs,
 } from "../src/utils/adminStatsChart";
 
 describe("getAdminStats", () => {
@@ -13,7 +16,7 @@ describe("getAdminStats", () => {
     jest.resetAllMocks();
   });
 
-  it("parses successful response", async () => {
+  it("loads secondary system health metrics with the admin bearer token", async () => {
     const mock = {
       total_requests: 10,
       active_requests: 2,
@@ -44,7 +47,59 @@ describe("getAdminStats", () => {
     await expect(getAdminStats("bad")).rejects.toThrow();
   });
 
-  it("builds chart metrics for the admin usage chart", () => {
+  it("loads primary AI agent metrics and failed-generation alerts", async () => {
+    const mock = {
+      summary: {
+        itinerary_agent_response_time_ms: 125,
+        budget_optimizer_agent_response_time_ms: 88,
+        recent_failure_count: 1,
+      },
+      alerts: [
+        {
+          id: 1,
+          agent_name: "Itinerary Agent",
+          operation: "generate_itinerary",
+          message: "invalid JSON",
+          created_at: "2026-06-14T10:00:00",
+        },
+      ],
+      logs: [
+        {
+          id: 1,
+          agent_name: "Itinerary Agent",
+          metric_label: "Itinerary Agent Response Time",
+          operation: "generate_itinerary",
+          destination: "Tokyo",
+          model: "phi3",
+          status: "failed",
+          response_time_ms: 125,
+          error_message: "invalid JSON",
+          fallback_used: false,
+          created_at: "2026-06-14T10:00:00",
+        },
+      ],
+    };
+
+    global.fetch = jest.fn(() =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve(mock) } as any)
+    );
+
+    const res = await getAdminAIAgentMetrics("jwt-token");
+
+    expect(res.summary.recent_failure_count).toBe(1);
+    expect(res.alerts[0].message).toBe("invalid JSON");
+    expect(res.logs[0].metric_label).toBe("Itinerary Agent Response Time");
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/admin/ai-agent-metrics?limit=50"),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer jwt-token",
+        }),
+      })
+    );
+  });
+
+  it("builds compact secondary system health metrics", () => {
     const metrics = buildAdminUsageMetrics({
       total_requests: 10,
       active_requests: 2,
@@ -58,18 +113,47 @@ describe("getAdminStats", () => {
       "p95_latency_ms",
       "error_count",
     ]);
+    expect(metrics.map((metric) => metric.label)).toEqual([
+      "Requests",
+      "Active now",
+      "P95 latency",
+      "Errors",
+    ]);
     expect(metrics[2].formattedValue).toBe("123 ms");
-  });
-
-  it("normalizes chart bar width without dropping visible non-zero values", () => {
-    expect(getUsageMetricPercent(0, 10)).toBe(0);
-    expect(getUsageMetricPercent(1, 100)).toBe(6);
-    expect(getUsageMetricPercent(50, 100)).toBe(50);
-    expect(getUsageMetricPercent(120, 100)).toBe(100);
   });
 
   it("formats latency with milliseconds", () => {
     expect(formatAdminStatValue("p95_latency_ms", 87.6)).toBe("88 ms");
     expect(formatAdminStatValue("error_count", 3)).toBe("3");
+  });
+
+  it("builds descriptive AI agent response-time labels", () => {
+    const metrics = buildAIAgentPerformanceMetrics({
+      summary: {
+        itinerary_agent_response_time_ms: 125,
+        budget_optimizer_agent_response_time_ms: 88,
+        recent_failure_count: 0,
+      },
+      alerts: [],
+      logs: [],
+    });
+
+    expect(metrics.map((metric) => metric.label)).toEqual([
+      "Itinerary Agent Response Time",
+      "Budget Optimizer Agent Response Time",
+    ]);
+    expect(metrics.map((metric) => metric.formattedValue)).toEqual([
+      "125 ms",
+      "88 ms",
+    ]);
+    expect(formatAgentResponseTime(null)).toBe("-");
+  });
+
+  it("shows only three AI logs until expanded", () => {
+    const logs = [1, 2, 3, 4, 5];
+
+    expect(COLLAPSED_AI_LOG_COUNT).toBe(3);
+    expect(getVisibleAIAgentLogs(logs, false)).toEqual([1, 2, 3]);
+    expect(getVisibleAIAgentLogs(logs, true)).toEqual(logs);
   });
 });

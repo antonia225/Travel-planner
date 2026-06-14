@@ -123,6 +123,44 @@ export type AdminStats = {
   error_count: number;
 };
 
+export type AIAgentName = "Itinerary Agent" | "Budget Optimizer Agent";
+
+export type AIAgentMetricLabel =
+  | "Itinerary Agent Response Time"
+  | "Budget Optimizer Agent Response Time";
+
+export type AIAgentOperation = "generate_itinerary" | "optimize_budget";
+
+export type AIAgentStatus = "success" | "failed";
+
+export type AdminAIAgentMetrics = {
+  summary: {
+    itinerary_agent_response_time_ms: number | null;
+    budget_optimizer_agent_response_time_ms: number | null;
+    recent_failure_count: number;
+  };
+  alerts: {
+    id: number;
+    agent_name: AIAgentName;
+    operation: string;
+    message: string;
+    created_at: string;
+  }[];
+  logs: {
+    id: number;
+    agent_name: AIAgentName;
+    metric_label: AIAgentMetricLabel;
+    operation: AIAgentOperation;
+    destination: string | null;
+    model: string | null;
+    status: AIAgentStatus;
+    response_time_ms: number | null;
+    error_message: string | null;
+    fallback_used: boolean;
+    created_at: string;
+  }[];
+};
+
 export function canAccessAdmin(user?: UserProfile | null): boolean {
   return user?.role === "admin" || user?.role === "super_admin";
 }
@@ -414,6 +452,17 @@ export function listAdminUsers(token: string): Promise<AdminUser[]> {
 
 export function getAdminStats(token: string): Promise<AdminStats> {
   return fetchJson<AdminStats>("/admin/stats", {}, token);
+}
+
+export function getAdminAIAgentMetrics(
+  token: string,
+  limit = 50
+): Promise<AdminAIAgentMetrics> {
+  return fetchJson<AdminAIAgentMetrics>(
+    `/admin/ai-agent-metrics?limit=${limit}`,
+    {},
+    token
+  );
 }
 
 export function updateAdminUserRole(

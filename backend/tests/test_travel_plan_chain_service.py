@@ -49,15 +49,15 @@ def _sample_budget_plan(destination: str = "Lisbon") -> BudgetOptimizerResponse:
     )
 
 
-def test_chain_runs_agent_1_then_agent_2_with_itinerary_destination(monkeypatch):
+def test_chain_runs_itinerary_then_budget_optimizer_with_itinerary_destination(monkeypatch):
     calls: list[tuple[str, dict[str, object]]] = []
 
     async def fake_generate_itinerary(**kwargs):
-        calls.append(("agent_1", kwargs))
+        calls.append(("itinerary_agent", kwargs))
         return _sample_itinerary(destination="Porto")
 
     async def fake_generate_budget_plan(**kwargs):
-        calls.append(("agent_2", kwargs))
+        calls.append(("budget_optimizer_agent", kwargs))
         return _sample_budget_plan(destination=kwargs["destination"])
 
     monkeypatch.setattr(
@@ -83,7 +83,10 @@ def test_chain_runs_agent_1_then_agent_2_with_itinerary_destination(monkeypatch)
 
     assert result["itinerary"].destination == "Porto"
     assert result["budget_plan"].destination == "Porto"
-    assert [call[0] for call in calls] == ["agent_1", "agent_2"]
+    assert [call[0] for call in calls] == [
+        "itinerary_agent",
+        "budget_optimizer_agent",
+    ]
     assert calls[0][1]["destination"] == "Lisbon"
     assert calls[0][1]["days"] == 3
     assert calls[0][1]["budget"] == 800
@@ -92,12 +95,14 @@ def test_chain_runs_agent_1_then_agent_2_with_itinerary_destination(monkeypatch)
     assert calls[1][1] == {"destination": "Porto", "budget": 800}
 
 
-def test_chain_does_not_call_agent_2_when_agent_1_fails(monkeypatch):
+def test_chain_does_not_call_budget_optimizer_when_itinerary_agent_fails(monkeypatch):
     async def fake_generate_itinerary(**kwargs):
         raise ValueError("invalid itinerary JSON")
 
     async def fake_generate_budget_plan(**kwargs):
-        raise AssertionError("Agent 2 should not be called when Agent 1 fails.")
+        raise AssertionError(
+            "Budget Optimizer Agent should not be called when Itinerary Agent fails."
+        )
 
     monkeypatch.setattr(
         travel_plan_chain_service,
@@ -112,7 +117,7 @@ def test_chain_does_not_call_agent_2_when_agent_1_fails(monkeypatch):
 
     with pytest.raises(
         ValueError,
-        match="Agent 1 itinerary generation failed: invalid itinerary JSON",
+        match="Itinerary Agent generation failed: invalid itinerary JSON",
     ):
         asyncio.run(
             travel_plan_chain_service.generate_itinerary_with_budget_plan(
@@ -123,7 +128,7 @@ def test_chain_does_not_call_agent_2_when_agent_1_fails(monkeypatch):
         )
 
 
-def test_chain_wraps_agent_2_errors(monkeypatch):
+def test_chain_wraps_budget_optimizer_agent_errors(monkeypatch):
     async def fake_generate_itinerary(**kwargs):
         return _sample_itinerary()
 
@@ -143,7 +148,7 @@ def test_chain_wraps_agent_2_errors(monkeypatch):
 
     with pytest.raises(
         ValueError,
-        match="Agent 2 budget optimization failed: invalid budget JSON",
+        match="Budget Optimizer Agent generation failed: invalid budget JSON",
     ):
         asyncio.run(
             travel_plan_chain_service.generate_itinerary_with_budget_plan(
@@ -156,10 +161,12 @@ def test_chain_wraps_agent_2_errors(monkeypatch):
 
 def test_chain_rejects_non_positive_budget_before_calling_agents(monkeypatch):
     async def fake_generate_itinerary(**kwargs):
-        raise AssertionError("Agent 1 should not be called for invalid budget.")
+        raise AssertionError("Itinerary Agent should not be called for invalid budget.")
 
     async def fake_generate_budget_plan(**kwargs):
-        raise AssertionError("Agent 2 should not be called for invalid budget.")
+        raise AssertionError(
+            "Budget Optimizer Agent should not be called for invalid budget."
+        )
 
     monkeypatch.setattr(
         travel_plan_chain_service,

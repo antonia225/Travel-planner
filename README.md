@@ -115,12 +115,14 @@ http://localhost:8000  →  http://192.168.1.YOUR_IP:8000
 The backend exposes an admin-only endpoint that returns aggregated usage metrics from Prometheus:
 
 - `GET /admin/stats` — requires a logged-in user with the `admin` or `super_admin` role.
+- `GET /admin/ai-agent-metrics?limit=50` — requires a logged-in user with the `admin` or `super_admin` role and returns recent Itinerary Agent and Budget Optimizer Agent response-time logs.
 
 Environment variables:
 
 - `PROMETHEUS_URL` — URL for Prometheus (defaults to `http://prometheus:9090` in docker-compose).
+- `ENABLE_METRICS_ENDPOINT` — must be `true` so Prometheus can scrape the backend `/metrics` endpoint. Docker Compose sets this automatically for the backend service.
 
-The frontend includes an `AdminStatsScreen` that polls `/admin/stats` and shows Total Requests, Active Requests, P95 latency (ms) and Error Count.
+The frontend includes an `AdminStatsScreen` that polls `/admin/stats` and `/admin/ai-agent-metrics` to show request metrics, AI agent response times, recent logs, and failed-generation alerts.
 
 ## Running Tests
 

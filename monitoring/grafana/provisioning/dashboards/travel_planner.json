@@ -37,7 +37,7 @@
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "http_requests_in_progress",
+          "expr": "http_requests_inprogress",
           "legendFormat": "in progress"
         }
       ],
