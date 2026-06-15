@@ -124,8 +124,7 @@ export function getTripDurationLabel(trip: SavedTrip) {
 }
 
 export function getTripDisplayTitle(trip: SavedTrip) {
-  const dateRange = getTripDateRange(trip);
-  return dateRange ? `${trip.name} • ${dateRange}` : trip.name;
+  return trip.name;
 }
 
 function sumTripActivityCosts(trip: SavedTrip | null) {
@@ -529,6 +528,11 @@ export default function LibraryScreen({ navigation }: Props) {
                   <ItineraryBudgetSummary
                     totalCostEur={getTripTotalCost(selectedTrip)}
                     budgetEur={getTripBudget(selectedTrip)}
+                    travelers={
+                      typeof selectedTrip.trip_data.travelers === "number"
+                        ? selectedTrip.trip_data.travelers
+                        : null
+                    }
                     currency={selectedTrip.trip_data.currency ?? "EUR"}
                     estimatedSavingsEur={getVisibleBudgetOptimizationSavings(
                       selectedTrip.trip_data.days,

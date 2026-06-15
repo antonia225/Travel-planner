@@ -28,12 +28,11 @@ function buildSavedTrip(overrides: Partial<SavedTrip> = {}): SavedTrip {
 }
 
 describe("library trip display helpers", () => {
-  it("adds the trip dates to the displayed saved-trip title", () => {
+  it("shows only the saved trip name as the displayed title", () => {
     const trip = buildSavedTrip();
 
-    expect(getTripDisplayTitle(trip)).toBe(
-      "Paris spring • Sep 17, 2026 - Sep 20, 2026"
-    );
+    expect(getTripDisplayTitle(trip)).toBe("Paris spring");
+    expect(getTripDateRange(trip)).toBe("Sep 17, 2026 - Sep 20, 2026");
   });
 
   it("shows duration clearly from saved itinerary days", () => {

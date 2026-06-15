@@ -78,6 +78,7 @@ export type ItineraryResult = {
   start_date?: string | null;
   end_date?: string | null;
   budget_eur?: number | null;
+  travelers?: number | null;
   budget_optimization?: BudgetOptimizerResponse | null;
   days?: ItineraryDay[];
   [key: string]: unknown;
@@ -347,6 +348,7 @@ export default function HomeScreen({ navigation }: Props) {
         start_date: generatedItinerary.start_date ?? tripData.startDate,
         end_date: generatedItinerary.end_date ?? tripData.endDate,
         budget_eur: generatedItinerary.budget_eur ?? tripData.budget,
+        travelers: generatedItinerary.travelers ?? tripData.travelers,
         currency: generatedItinerary.currency ?? "EUR",
         days: addCalendarDatesToDays(generatedItinerary.days, tripData.startDate),
       };
@@ -803,6 +805,7 @@ export default function HomeScreen({ navigation }: Props) {
                   <ItineraryBudgetSummary
                     totalCostEur={displayedActivityTotal}
                     budgetEur={itineraryResult.budget_eur ?? activityBudgetEur}
+                    travelers={itineraryResult.travelers}
                     currency={currency}
                     estimatedSavingsEur={currentEstimatedSavings}
                   />

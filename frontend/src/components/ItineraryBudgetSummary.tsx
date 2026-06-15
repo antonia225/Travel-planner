@@ -9,6 +9,7 @@ const EURO = "\u20ac";
 type Props = {
   totalCostEur: number;
   budgetEur?: number | null;
+  travelers?: number | null;
   currency?: "EUR";
   estimatedSavingsEur?: number | null;
 };
@@ -16,6 +17,7 @@ type Props = {
 export default function ItineraryBudgetSummary({
   totalCostEur,
   budgetEur,
+  travelers,
   estimatedSavingsEur,
 }: Props) {
   const budgetText =
@@ -28,6 +30,10 @@ export default function ItineraryBudgetSummary({
   const finalCostWithAlternatives = hasSavings
     ? Math.max(totalCostEur - estimatedSavingsEur, 0)
     : null;
+  const travelerText =
+    typeof travelers === "number" && travelers > 0
+      ? `${travelers} ${travelers === 1 ? "traveler" : "travelers"}`
+      : null;
 
   return (
     <View style={styles.budgetSummary}>
@@ -39,6 +45,9 @@ export default function ItineraryBudgetSummary({
           {totalCostEur}
           {budgetText}
         </Text>
+        {travelerText ? (
+          <Text style={styles.travelerText}>For {travelerText}</Text>
+        ) : null}
         {finalCostWithAlternatives !== null ? (
           <Text style={styles.finalCostText}>
             Final cost with alternatives{" "}
@@ -97,6 +106,13 @@ const styles = StyleSheet.create({
     color: colors.teal700,
     fontSize: 13,
     fontWeight: "800",
+    lineHeight: 18,
+    marginTop: spacing.xs,
+  },
+  travelerText: {
+    color: colors.slate600,
+    fontSize: 13,
+    fontWeight: "700",
     lineHeight: 18,
     marginTop: spacing.xs,
   },

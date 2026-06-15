@@ -15,6 +15,7 @@ const KNOWN_TRIP_DATA_KEYS = new Set([
   "start_date",
   "end_date",
   "budget_eur",
+  "travelers",
   "budget_optimization",
 ]);
 
@@ -73,8 +74,7 @@ function getTripDestination(trip: SavedTrip) {
 }
 
 function getTripDisplayTitle(trip: SavedTrip) {
-  const dateRange = getTripDateRange(trip);
-  return dateRange ? `${trip.name} - ${dateRange}` : trip.name;
+  return trip.name;
 }
 
 function sumTripActivityCosts(trip: SavedTrip) {
@@ -131,6 +131,16 @@ function getTripDurationLabel(trip: SavedTrip) {
   }
 
   return `${days} ${days === 1 ? "day" : "days"}`;
+}
+
+function getTravelerLabel(trip: SavedTrip) {
+  const travelers = trip.trip_data.travelers;
+
+  if (typeof travelers !== "number" || travelers <= 0) {
+    return "Travelers not set";
+  }
+
+  return `${travelers} ${travelers === 1 ? "traveler" : "travelers"}`;
 }
 
 function renderMoney(value?: number | null) {
@@ -340,6 +350,10 @@ function renderOverview(trip: SavedTrip, exportedDate: string) {
           <strong>${escapeHtml(getTripDurationLabel(trip))}</strong>
         </div>
         <div class="fact-card">
+          <span>Travelers</span>
+          <strong>${escapeHtml(getTravelerLabel(trip))}</strong>
+        </div>
+        <div class="fact-card">
           <span>Currency</span>
           <strong>${escapeHtml(trip.trip_data.currency ?? "EUR")}</strong>
         </div>
@@ -508,7 +522,7 @@ export function buildSavedTripPdfHtml(trip: SavedTrip, exportedAt = new Date()) 
       .overview-grid {
         display: grid;
         gap: 10px;
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(5, 1fr);
         margin-bottom: 14px;
       }
       .fact-card {

@@ -15,6 +15,7 @@ function buildSavedTrip(overrides: Partial<SavedTrip> = {}): SavedTrip {
       start_date: "2026-09-17",
       end_date: "2026-09-18",
       budget_eur: 800,
+      travelers: 2,
       total_estimated_cost_eur: 245,
       travel_style: "Relaxed",
       days: [
@@ -84,6 +85,12 @@ describe("saved trip PDF HTML", () => {
     expect(html).toContain("Paris spring");
     expect(html).toContain("Paris");
     expect(html).toContain("Sep 17, 2026 - Sep 18, 2026");
+    expect(html).toContain("<h1>Paris spring</h1>");
+    expect(html).not.toContain(
+      "<h1>Paris spring - Sep 17, 2026 - Sep 18, 2026</h1>"
+    );
+    expect(html).toContain("Travelers");
+    expect(html).toContain("2 travelers");
     expect(html).toContain("Louvre visit");
     expect(html).toContain("Explore the galleries with an AI-generated plan.");
     expect(html).toContain("09:00 - 11:00");

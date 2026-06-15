@@ -100,6 +100,7 @@ describe("itinerary budget UI", () => {
       <ItineraryBudgetSummary
         totalCostEur={245}
         budgetEur={800}
+        travelers={2}
         estimatedSavingsEur={40}
       />
     );
@@ -108,6 +109,7 @@ describe("itinerary budget UI", () => {
 
     expect(visibleText).toContain("Activities total cost");
     expect(visibleText).toContain(`${EURO}245 of ${EURO}800 budget`);
+    expect(visibleText).toContain("For 2 travelers");
     expect(visibleText).toContain(`Final cost with alternatives ${EURO}205`);
     expect(visibleText).not.toContain("budget EUR");
     expect(visibleText).toContain(`Save${EURO}40`);
@@ -295,6 +297,7 @@ describe("itinerary budget UI", () => {
       {
         destination: "Rome",
         budget_eur: 1000,
+        travelers: 2,
         days: [],
       },
       budgetOptimization
@@ -322,6 +325,7 @@ describe("itinerary budget UI", () => {
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.tripData.budget_optimization.total_estimated_savings_eur).toBe(40);
+    expect(body.tripData.travelers).toBe(2);
     expect(body.tripData.budget_optimization.recommendations[0].original_activity).toBe(
       "Rooftop dinner"
     );
