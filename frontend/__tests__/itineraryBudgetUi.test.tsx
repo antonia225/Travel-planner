@@ -100,6 +100,7 @@ describe("itinerary budget UI", () => {
       <ItineraryBudgetSummary
         totalCostEur={245}
         budgetEur={800}
+        travelers={2}
         estimatedSavingsEur={40}
       />
     );
@@ -108,6 +109,8 @@ describe("itinerary budget UI", () => {
 
     expect(visibleText).toContain("Activities total cost");
     expect(visibleText).toContain(`${EURO}245 of ${EURO}800 budget`);
+    expect(visibleText).toContain("For 2 travelers");
+    expect(visibleText).toContain(`Final cost with alternatives ${EURO}205`);
     expect(visibleText).not.toContain("budget EUR");
     expect(visibleText).toContain(`Save${EURO}40`);
     expect(visibleText).toContain("with alternatives");
@@ -131,6 +134,22 @@ describe("itinerary budget UI", () => {
     });
 
     expect(savings).toBe(40);
+  });
+
+  it("derives savings from original and alternative costs when savings are missing", () => {
+    const savings = getBudgetOptimizationSavings({
+      destination: "Rome",
+      total_budget: 1000,
+      recommendations: [
+        {
+          original_activity: "Museum",
+          original_cost_eur: 45,
+          estimated_alternative_cost_eur: 20,
+        },
+      ],
+    });
+
+    expect(savings).toBe(25);
   });
 
   it("shows a cancel option while itinerary generation is loading", () => {
@@ -294,6 +313,7 @@ describe("itinerary budget UI", () => {
       {
         destination: "Rome",
         budget_eur: 1000,
+        travelers: 2,
         days: [],
       },
       budgetOptimization
@@ -321,6 +341,7 @@ describe("itinerary budget UI", () => {
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.tripData.budget_optimization.total_estimated_savings_eur).toBe(40);
+    expect(body.tripData.travelers).toBe(2);
     expect(body.tripData.budget_optimization.recommendations[0].original_activity).toBe(
       "Rooftop dinner"
     );
@@ -350,7 +371,6 @@ describe("itinerary budget UI", () => {
               original_cost_eur: 70,
               suggested_alternative: "Choose a neighborhood trattoria.",
               estimated_alternative_cost_eur: 30,
-              estimated_savings_eur: 40,
               reason: "Lower menu prices with a local meal.",
             },
           ],

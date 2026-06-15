@@ -43,6 +43,7 @@ export type ItineraryResponse = {
   start_date?: string | null;
   end_date?: string | null;
   budget_eur?: number | null;
+  travelers?: number | null;
   days: DailySchedule[];
 };
 
@@ -78,6 +79,7 @@ export type GeneratedTripData = {
   start_date?: string | null;
   end_date?: string | null;
   budget_eur?: number | null;
+  travelers?: number | null;
   budget_optimization?: BudgetOptimizerResponse | null;
   [key: string]: unknown;
 };

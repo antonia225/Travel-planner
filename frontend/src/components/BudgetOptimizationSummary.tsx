@@ -3,7 +3,10 @@ import { StyleSheet, Text, View } from "react-native";
 
 import type { BudgetOptimizerResponse } from "../services/api";
 import { colors, radius, spacing } from "../theme/designSystem";
-import { getBudgetOptimizationSavings } from "../utils/budgetOptimization";
+import {
+  getBudgetOptimizationSavings,
+  getBudgetRecommendationSavings,
+} from "../utils/budgetOptimization";
 
 const EURO = "\u20ac";
 
@@ -13,7 +16,7 @@ type Props = {
 
 function hasActivitySavings(result: BudgetOptimizerResponse) {
   return result.recommendations.some(
-    (item) => typeof item.estimated_savings_eur === "number"
+    (item) => typeof getBudgetRecommendationSavings(item) === "number"
   );
 }
 
@@ -50,6 +53,7 @@ export default function BudgetOptimizationSummary({ result }: Props) {
           const title =
             item.original_activity || item.category || `Suggestion ${index + 1}`;
           const alternative = item.suggested_alternative || item.recommendation;
+          const itemSavings = getBudgetRecommendationSavings(item);
 
           return (
             <View key={`${title}-${index}`} style={styles.item}>
@@ -65,12 +69,12 @@ export default function BudgetOptimizationSummary({ result }: Props) {
                 ) : null}
               </View>
 
-              {typeof item.estimated_savings_eur === "number" ? (
+              {typeof itemSavings === "number" ? (
                 <View style={styles.savingsRow}>
                   <Text style={styles.alternativeLabel}>AI alternative</Text>
                   <Text style={styles.savingsValue}>
                     Save {EURO}
-                    {item.estimated_savings_eur}
+                    {itemSavings}
                   </Text>
                 </View>
               ) : null}

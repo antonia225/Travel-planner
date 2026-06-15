@@ -9,6 +9,7 @@ const EURO = "\u20ac";
 type Props = {
   totalCostEur: number;
   budgetEur?: number | null;
+  travelers?: number | null;
   currency?: "EUR";
   estimatedSavingsEur?: number | null;
 };
@@ -16,6 +17,7 @@ type Props = {
 export default function ItineraryBudgetSummary({
   totalCostEur,
   budgetEur,
+  travelers,
   estimatedSavingsEur,
 }: Props) {
   const budgetText =
@@ -25,6 +27,13 @@ export default function ItineraryBudgetSummary({
 
   const hasSavings =
     typeof estimatedSavingsEur === "number" && estimatedSavingsEur > 0;
+  const finalCostWithAlternatives = hasSavings
+    ? Math.max(totalCostEur - estimatedSavingsEur, 0)
+    : null;
+  const travelerText =
+    typeof travelers === "number" && travelers > 0
+      ? `${travelers} ${travelers === 1 ? "traveler" : "travelers"}`
+      : null;
 
   return (
     <View style={styles.budgetSummary}>
@@ -36,6 +45,18 @@ export default function ItineraryBudgetSummary({
           {totalCostEur}
           {budgetText}
         </Text>
+        {travelerText ? (
+          <Text style={styles.travelerText}>For {travelerText}</Text>
+        ) : null}
+        {finalCostWithAlternatives !== null ? (
+          <Text style={styles.finalCostText}>
+            Final cost with alternatives{" "}
+            <Text style={styles.finalCostAmount}>
+              {EURO}
+              {finalCostWithAlternatives}
+            </Text>
+          </Text>
+        ) : null}
       </View>
       {hasSavings ? (
         <View style={styles.savingsBadge}>
@@ -80,6 +101,23 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     lineHeight: 22,
     marginTop: 2,
+  },
+  finalCostText: {
+    color: colors.teal700,
+    fontSize: 13,
+    fontWeight: "800",
+    lineHeight: 18,
+    marginTop: spacing.xs,
+  },
+  travelerText: {
+    color: colors.slate600,
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 18,
+    marginTop: spacing.xs,
+  },
+  finalCostAmount: {
+    color: colors.amber600,
   },
   savingsBadge: {
     alignItems: "center",
