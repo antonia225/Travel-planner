@@ -108,6 +108,7 @@ describe("itinerary budget UI", () => {
 
     expect(visibleText).toContain("Activities total cost");
     expect(visibleText).toContain(`${EURO}245 of ${EURO}800 budget`);
+    expect(visibleText).toContain(`Final cost with alternatives ${EURO}205`);
     expect(visibleText).not.toContain("budget EUR");
     expect(visibleText).toContain(`Save${EURO}40`);
     expect(visibleText).toContain("with alternatives");

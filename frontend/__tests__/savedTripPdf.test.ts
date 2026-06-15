@@ -16,6 +16,7 @@ function buildSavedTrip(overrides: Partial<SavedTrip> = {}): SavedTrip {
       end_date: "2026-09-18",
       budget_eur: 800,
       total_estimated_cost_eur: 245,
+      travel_style: "Relaxed",
       days: [
         {
           day_number: 1,
@@ -91,37 +92,60 @@ describe("saved trip PDF HTML", () => {
     expect(html).toContain("Exported Jun 14, 2026");
   });
 
-  it("renders activity categories, timeline icon markup, theme colors, and day page breaks", () => {
+  it("renders activity categories, document colors, and day page breaks without timeline UI markup", () => {
     const html = buildSavedTripPdfHtml(buildSavedTrip());
 
     expect(html).toContain("Sightseeing");
     expect(html).toContain("Dining");
     expect(html).toContain("Explore");
-    expect(html).toContain("class=\"rail\"");
-    expect(html).toContain("class=\"icon-node\"");
-    expect(html).toContain("class=\"activity-icon\"");
+    expect(html).toContain("class=\"schedule-item\"");
+    expect(html).not.toContain("class=\"rail\"");
+    expect(html).not.toContain("class=\"icon-node\"");
+    expect(html).not.toContain("class=\"activity-icon\"");
     expect(html).toContain(`background: ${colors.teal50}`);
-    expect(html).toContain(`color: ${colors.slate600}`);
+    expect(html).toContain(`color: ${colors.sky600}`);
     expect(html).toContain(`background: ${colors.amber50}`);
     expect(html).toContain(`background: ${colors.sky50}`);
+    expect(html).toContain(`color: ${colors.amber600}`);
+    expect(html).toContain(`color: ${colors.teal700}`);
+    expect(html).toContain("@page { size: A4; margin: 32px; }");
     expect(html).toContain("page-break-before: always");
     expect(html).toContain("break-before: page");
   });
 
-  it("includes the visible budget summary and only matched budget alternatives", () => {
+  it("includes the budget overview and only matched inline budget tips", () => {
     const html = buildSavedTripPdfHtml(buildSavedTrip());
 
-    expect(html).toContain("Activities total cost");
+    expect(html).toContain("Total activity cost");
     expect(html).toContain("&#8364;245");
-    expect(html).toContain("of &#8364;800 budget");
-    expect(html).toContain("with alternatives");
+    expect(html).toContain("Final cost with alternatives <span>&#8364;205</span>");
+    expect(html).toContain(`.final-cost {\n        color: ${colors.teal700};`);
+    expect(html).toContain(`.final-cost span {\n        color: ${colors.amber600};`);
+    expect(html).toContain("Trip budget");
+    expect(html).toContain("Estimated savings with alternatives");
     expect(html).toContain("Choose a neighborhood bistro.");
     expect(html).toContain("Original &#8364;70");
     expect(html).toContain("Alt cost &#8364;30");
     expect(html).toContain("Save &#8364;40");
     expect(html).toContain("Lower menu prices with a local meal.");
+    expect(html).toContain(`.original-cost { color: ${colors.slate500}; }`);
+    expect(html).toContain(`.alt-cost { color: ${colors.amber600}; }`);
+    expect(html).toContain(`.savings {\n        color: ${colors.teal700};`);
+    expect(html).not.toContain("All optimization tips");
+    expect(html).not.toContain("Unshown activity");
     expect(html).not.toContain("This should not be visible.");
-    expect(html).not.toContain("&#8364;50");
+    expect(html).not.toContain("Save &#8364;50");
+  });
+
+  it("includes saved, updated, exported, and additional trip metadata", () => {
+    const html = buildSavedTripPdfHtml(buildSavedTrip(), new Date(2026, 5, 14));
+
+    expect(html).toContain("Saved ");
+    expect(html).toContain("Updated ");
+    expect(html).toContain("Exported Jun 14, 2026");
+    expect(html).toContain("Additional saved trip details");
+    expect(html).toContain("Travel Style");
+    expect(html).toContain("Relaxed");
   });
 
   it("escapes saved and generated text before putting it into HTML", () => {
@@ -165,8 +189,10 @@ describe("saved trip PDF HTML", () => {
       })
     );
 
-    expect(html).toContain("Saved trip data");
-    expect(html).toContain("&quot;destination&quot;: &quot;Draft&quot;");
+    expect(html).toContain("Itinerary details");
+    expect(html).toContain("Destination");
+    expect(html).toContain("Draft");
+    expect(html).toContain("Note");
     expect(html).toContain("No structured itinerary yet");
   });
 

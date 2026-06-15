@@ -25,6 +25,9 @@ export default function ItineraryBudgetSummary({
 
   const hasSavings =
     typeof estimatedSavingsEur === "number" && estimatedSavingsEur > 0;
+  const finalCostWithAlternatives = hasSavings
+    ? Math.max(totalCostEur - estimatedSavingsEur, 0)
+    : null;
 
   return (
     <View style={styles.budgetSummary}>
@@ -36,6 +39,15 @@ export default function ItineraryBudgetSummary({
           {totalCostEur}
           {budgetText}
         </Text>
+        {finalCostWithAlternatives !== null ? (
+          <Text style={styles.finalCostText}>
+            Final cost with alternatives{" "}
+            <Text style={styles.finalCostAmount}>
+              {EURO}
+              {finalCostWithAlternatives}
+            </Text>
+          </Text>
+        ) : null}
       </View>
       {hasSavings ? (
         <View style={styles.savingsBadge}>
@@ -80,6 +92,16 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     lineHeight: 22,
     marginTop: 2,
+  },
+  finalCostText: {
+    color: colors.teal700,
+    fontSize: 13,
+    fontWeight: "800",
+    lineHeight: 18,
+    marginTop: spacing.xs,
+  },
+  finalCostAmount: {
+    color: colors.amber600,
   },
   savingsBadge: {
     alignItems: "center",
