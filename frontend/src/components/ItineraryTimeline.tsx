@@ -24,7 +24,10 @@ import {
   inferActivityCategoryMeta,
   type ActivityCategoryKey,
 } from "../utils/activityMeta";
-import { mapBudgetRecommendationsToActivityKeys } from "../utils/budgetOptimization";
+import {
+  getBudgetRecommendationSavings,
+  mapBudgetRecommendationsToActivityKeys,
+} from "../utils/budgetOptimization";
 
 const EURO = "\u20ac";
 
@@ -148,6 +151,7 @@ function TimelineActivityCard({
   const alternative =
     budgetRecommendation?.suggested_alternative ??
     budgetRecommendation?.recommendation;
+  const estimatedSavings = getBudgetRecommendationSavings(budgetRecommendation);
 
   return (
     <View style={styles.timelineItem}>
@@ -246,13 +250,12 @@ function TimelineActivityCard({
                   </Text>
                 </View>
               ) : null}
-              {typeof budgetRecommendation?.estimated_savings_eur ===
-              "number" ? (
+              {typeof estimatedSavings === "number" ? (
                 <View style={[styles.alternativeCostChip, styles.savingsChip]}>
                   <Text style={styles.savingsChipLabel}>Save</Text>
                   <Text style={styles.savingsChipValue}>
                     {EURO}
-                    {budgetRecommendation.estimated_savings_eur}
+                    {estimatedSavings}
                   </Text>
                 </View>
               ) : null}

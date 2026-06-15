@@ -60,7 +60,6 @@ function buildSavedTrip(overrides: Partial<SavedTrip> = {}): SavedTrip {
             original_cost_eur: 70,
             suggested_alternative: "Choose a neighborhood bistro.",
             estimated_alternative_cost_eur: 30,
-            estimated_savings_eur: 40,
             reason: "Lower menu prices with a local meal.",
           },
           {

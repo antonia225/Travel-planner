@@ -2,6 +2,7 @@ import type { BudgetRecommendation, SavedTrip } from "../services/api";
 import { colors } from "../theme/designSystem";
 import { inferActivityCategoryMeta } from "./activityMeta";
 import {
+  getBudgetRecommendationSavings,
   getVisibleBudgetOptimizationSavings,
   mapBudgetRecommendationsToActivityKeys,
 } from "./budgetOptimization";
@@ -209,7 +210,7 @@ function renderInlineBudgetTip(recommendation?: BudgetRecommendation) {
   const alternativeCost = renderMoney(
     recommendation.estimated_alternative_cost_eur
   );
-  const savings = renderMoney(recommendation.estimated_savings_eur);
+  const savings = renderMoney(getBudgetRecommendationSavings(recommendation));
 
   return `
     <section class="inline-tip">

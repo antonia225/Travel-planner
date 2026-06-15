@@ -47,9 +47,34 @@ export function getBudgetOptimizationSavings(
   }
 
   return result.recommendations.reduce(
-    (total, item) => total + (item.estimated_savings_eur ?? 0),
+    (total, item) => total + (getBudgetRecommendationSavings(item) ?? 0),
     0
   );
+}
+
+export function getBudgetRecommendationSavings(
+  recommendation?: BudgetRecommendation | null
+) {
+  if (!recommendation) {
+    return null;
+  }
+
+  if (typeof recommendation.estimated_savings_eur === "number") {
+    return recommendation.estimated_savings_eur;
+  }
+
+  if (
+    typeof recommendation.original_cost_eur === "number" &&
+    typeof recommendation.estimated_alternative_cost_eur === "number"
+  ) {
+    return Math.max(
+      recommendation.original_cost_eur -
+        recommendation.estimated_alternative_cost_eur,
+      0
+    );
+  }
+
+  return null;
 }
 
 export function getVisibleBudgetOptimizationSavings(
@@ -64,7 +89,7 @@ export function getVisibleBudgetOptimizationSavings(
     mapBudgetRecommendationsToActivityKeys(days, budgetOptimization)
   ).reduce(
     (total, match) =>
-      total + (match?.recommendation.estimated_savings_eur ?? 0),
+      total + (getBudgetRecommendationSavings(match?.recommendation) ?? 0),
     0
   );
 }
@@ -129,7 +154,7 @@ export function removeBudgetRecommendationForActivity(
     ...budgetOptimization,
     recommendations,
     total_estimated_savings_eur: recommendations.reduce(
-      (total, item) => total + (item.estimated_savings_eur ?? 0),
+      (total, item) => total + (getBudgetRecommendationSavings(item) ?? 0),
       0
     ),
   };

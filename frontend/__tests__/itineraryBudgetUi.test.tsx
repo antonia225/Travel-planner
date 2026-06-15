@@ -136,6 +136,22 @@ describe("itinerary budget UI", () => {
     expect(savings).toBe(40);
   });
 
+  it("derives savings from original and alternative costs when savings are missing", () => {
+    const savings = getBudgetOptimizationSavings({
+      destination: "Rome",
+      total_budget: 1000,
+      recommendations: [
+        {
+          original_activity: "Museum",
+          original_cost_eur: 45,
+          estimated_alternative_cost_eur: 20,
+        },
+      ],
+    });
+
+    expect(savings).toBe(25);
+  });
+
   it("shows a cancel option while itinerary generation is loading", () => {
     const tree = renderToJson(<TripSearchForm isSubmitting onCancel={jest.fn()} />);
 
@@ -355,7 +371,6 @@ describe("itinerary budget UI", () => {
               original_cost_eur: 70,
               suggested_alternative: "Choose a neighborhood trattoria.",
               estimated_alternative_cost_eur: 30,
-              estimated_savings_eur: 40,
               reason: "Lower menu prices with a local meal.",
             },
           ],
