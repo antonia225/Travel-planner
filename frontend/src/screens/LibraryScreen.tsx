@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ArrowLeft,
   CalendarDays,
@@ -42,7 +42,7 @@ import {
   renameSavedTrip,
 } from "../services/api";
 import type { BudgetOptimizerResponse, SavedTrip } from "../services/api";
-import { colors, radius, shadows, spacing } from "../theme/designSystem";
+import { colors, radius, shadows, spacing, typography } from "../theme/designSystem";
 import { getVisibleBudgetOptimizationSavings } from "../utils/budgetOptimization";
 import {
   buildSavedTripPdfHtml,
@@ -167,6 +167,7 @@ function formatDate(value: string) {
 
 export default function LibraryScreen({ navigation }: Props) {
   const { token, logout } = useAuth();
+  const insets = useSafeAreaInsets();
   const [savedTrips, setSavedTrips] = useState<SavedTrip[]>([]);
   const [selectedTrip, setSelectedTrip] = useState<SavedTrip | null>(null);
   const [tripToRename, setTripToRename] = useState<SavedTrip | null>(null);
@@ -352,14 +353,14 @@ export default function LibraryScreen({ navigation }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.root}>
+    <SafeAreaView edges={["top", "left", "right"]} style={styles.root}>
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
           activeOpacity={0.8}
           onPress={navigation.goBack}
         >
-          <ArrowLeft color={colors.white} size={22} strokeWidth={2.4} />
+          <ArrowLeft color={colors.slate700} size={22} strokeWidth={2.4} />
         </TouchableOpacity>
 
         <View style={styles.headerCopy}>
@@ -480,8 +481,13 @@ export default function LibraryScreen({ navigation }: Props) {
         animationType="slide"
         onRequestClose={() => setSelectedTrip(null)}
       >
-        <SafeAreaView style={styles.modalRoot}>
-          <View style={styles.modalHeader}>
+        <View style={styles.modalRoot}>
+          <View
+            style={[
+              styles.modalHeader,
+              { paddingTop: Math.max(spacing.lg, insets.top + spacing.sm) },
+            ]}
+          >
             <View style={styles.modalTitleRow}>
               <View style={styles.modalTitleWrap}>
                 <Text style={styles.modalKicker}>Saved trip</Text>
@@ -518,7 +524,10 @@ export default function LibraryScreen({ navigation }: Props) {
           </View>
 
           <ScrollView
-            contentContainerStyle={styles.modalContent}
+            contentContainerStyle={[
+              styles.modalContent,
+              { paddingBottom: Math.max(42, insets.bottom + 28) },
+            ]}
             showsVerticalScrollIndicator={false}
           >
             {selectedTrip?.trip_data.days?.length ? (
@@ -554,7 +563,7 @@ export default function LibraryScreen({ navigation }: Props) {
               </AppCard>
             )}
           </ScrollView>
-        </SafeAreaView>
+        </View>
       </Modal>
 
       <Modal
@@ -598,22 +607,22 @@ export default function LibraryScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   root: {
-    backgroundColor: colors.teal700,
+    backgroundColor: colors.slate50,
     flex: 1,
   },
   header: {
     alignItems: "center",
     flexDirection: "row",
     gap: spacing.md,
-    paddingBottom: spacing.xl,
-    paddingHorizontal: 20,
-    paddingTop: spacing.lg,
+    paddingBottom: spacing.lg,
+    paddingHorizontal: 18,
+    paddingTop: spacing.sm,
   },
   backButton: {
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.16)",
-    borderColor: "rgba(255,255,255,0.25)",
-    borderRadius: radius.lg,
+    backgroundColor: colors.white,
+    borderColor: colors.slate200,
+    borderRadius: radius.pill,
     borderWidth: 1,
     height: 44,
     justifyContent: "center",
@@ -623,22 +632,24 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerKicker: {
-    color: colors.teal100,
-    fontSize: 12,
-    fontWeight: "700",
+    color: colors.gold600,
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1,
     marginBottom: 3,
   },
   headerTitle: {
-    color: colors.white,
+    color: colors.slate900,
+    fontFamily: typography.displayFontFamily,
     fontSize: 28,
-    fontWeight: "800",
-    lineHeight: 34,
+    fontWeight: "700",
+    lineHeight: 35,
   },
   countBadge: {
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.16)",
-    borderColor: "rgba(255,255,255,0.25)",
-    borderRadius: radius.lg,
+    backgroundColor: colors.white,
+    borderColor: colors.slate200,
+    borderRadius: radius.pill,
     borderWidth: 1,
     height: 44,
     justifyContent: "center",
@@ -646,21 +657,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   countText: {
-    color: colors.white,
+    color: colors.teal700,
     fontSize: 15,
     fontWeight: "800",
   },
   scroll: {
-    backgroundColor: colors.slate50,
-    borderTopLeftRadius: radius.sheet,
-    borderTopRightRadius: radius.sheet,
     flex: 1,
   },
   scrollContent: {
     gap: spacing.lg,
-    paddingBottom: 42,
-    paddingHorizontal: 20,
-    paddingTop: 28,
+    paddingBottom: 36,
+    paddingHorizontal: 18,
+    paddingTop: spacing.sm,
   },
   feedbackCard: {
     alignItems: "center",
@@ -699,6 +707,7 @@ const styles = StyleSheet.create({
   },
   tripCard: {
     gap: spacing.lg,
+    borderRadius: 24,
   },
   tripHeader: {
     alignItems: "flex-start",
@@ -718,9 +727,10 @@ const styles = StyleSheet.create({
   },
   tripName: {
     color: colors.slate900,
-    fontSize: 17,
-    fontWeight: "800",
-    lineHeight: 23,
+    fontFamily: typography.displayFontFamily,
+    fontSize: 20,
+    fontWeight: "700",
+    lineHeight: 25,
   },
   tripDestination: {
     color: colors.slate600,
@@ -796,7 +806,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     gap: spacing.md,
     paddingHorizontal: 20,
-    paddingVertical: spacing.lg,
+    paddingBottom: spacing.lg,
   },
   modalTitleRow: {
     alignItems: "center",
@@ -816,9 +826,10 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     color: colors.slate900,
-    fontSize: 20,
-    fontWeight: "800",
-    lineHeight: 26,
+    fontFamily: typography.displayFontFamily,
+    fontSize: 23,
+    fontWeight: "700",
+    lineHeight: 29,
   },
   closeButton: {
     alignItems: "center",
@@ -854,7 +865,6 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     padding: 20,
-    paddingBottom: 42,
   },
   rawTripText: {
     color: colors.slate700,

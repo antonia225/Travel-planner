@@ -165,19 +165,22 @@ function TimelineActivityCard({
 
       <View style={styles.activityCard}>
         <View style={styles.activityHeader}>
-          <View style={styles.activityHeaderCopy}>
-            {activity.time_slot ? (
-              <Text style={styles.timeText}>{activity.time_slot}</Text>
-            ) : null}
-            <Text style={styles.activityType}>{label}</Text>
-            {typeof activity.estimated_cost_eur === "number" ? (
-              <View style={styles.costChip}>
-                <Text style={styles.costText}>
-                  {EURO}
-                  {activity.estimated_cost_eur}
-                </Text>
-              </View>
-            ) : null}
+          <View style={styles.activityTitleGroup}>
+            <Text style={styles.activityTitle}>{activity.title || "Activity"}</Text>
+            <View style={styles.activityMetaRow}>
+              {activity.time_slot ? (
+                <Text style={styles.timeText}>{activity.time_slot}</Text>
+              ) : null}
+              <Text style={styles.activityType}>{label}</Text>
+              {typeof activity.estimated_cost_eur === "number" ? (
+                <View style={styles.costChip}>
+                  <Text style={styles.costText}>
+                    {EURO}
+                    {activity.estimated_cost_eur}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
           </View>
 
           {onRegenerate ? (
@@ -210,7 +213,6 @@ function TimelineActivityCard({
           ) : null}
         </View>
 
-        <Text style={styles.activityTitle}>{activity.title || "Activity"}</Text>
         {activity.description ? (
           <Text style={styles.activityDescription}>{activity.description}</Text>
         ) : null}
@@ -298,10 +300,12 @@ export default function ItineraryTimeline({
         return (
           <View key={`day-${dayIndex}`} style={styles.dayBlock}>
             <View style={styles.dayHeader}>
-              <View style={styles.dayBadge}>
-                <Route color={colors.white} size={18} strokeWidth={2.4} />
+              <View style={styles.dayBadgeWrap}>
+                <View style={styles.dayBadge}>
+                  <Route color={colors.white} size={18} strokeWidth={2.4} />
+                </View>
               </View>
-              <View>
+              <View style={styles.dayHeaderCopy}>
                 <Text style={styles.dayEyebrow}>Day</Text>
                 <Text style={styles.dayTitle}>{day.day_number || dayIndex + 1}</Text>
                 {formatTimelineDate(day.date) ? (
@@ -350,20 +354,33 @@ const styles = StyleSheet.create({
     gap: spacing.xl,
   },
   dayBlock: {
+    backgroundColor: "rgba(255,255,255,0.48)",
+    borderColor: "rgba(255,255,255,0.82)",
+    borderRadius: radius.card,
+    borderWidth: 1,
     gap: spacing.md,
+    padding: spacing.md,
   },
   dayHeader: {
     alignItems: "center",
     flexDirection: "row",
     gap: spacing.md,
   },
+  dayBadgeWrap: {
+    backgroundColor: colors.cream,
+    borderRadius: radius.card,
+    padding: 4,
+  },
   dayBadge: {
     alignItems: "center",
-    backgroundColor: colors.teal600,
+    backgroundColor: colors.ink,
     borderRadius: radius.lg,
     height: 42,
     justifyContent: "center",
     width: 42,
+  },
+  dayHeaderCopy: {
+    flex: 1,
   },
   dayEyebrow: {
     color: colors.slate500,
@@ -388,15 +405,15 @@ const styles = StyleSheet.create({
   timelineItem: {
     alignItems: "stretch",
     flexDirection: "row",
-    gap: spacing.md,
+    gap: spacing.sm,
     minHeight: 112,
   },
   rail: {
     alignItems: "center",
-    width: 42,
+    width: 34,
   },
   railLine: {
-    backgroundColor: colors.teal200,
+    backgroundColor: colors.slate200,
     flex: 1,
     width: 2,
   },
@@ -405,37 +422,40 @@ const styles = StyleSheet.create({
   },
   iconNode: {
     alignItems: "center",
-    backgroundColor: colors.teal50,
-    borderColor: colors.tealBorder,
-    borderRadius: radius.lg,
+    backgroundColor: colors.white,
+    borderColor: colors.gold100,
+    borderRadius: radius.pill,
     borderWidth: 1,
-    height: 40,
+    height: 34,
     justifyContent: "center",
-    width: 40,
+    width: 34,
   },
   activityCard: {
-    backgroundColor: colors.white,
-    borderColor: colors.slate100,
-    borderRadius: radius.lg,
+    backgroundColor: "rgba(255,255,255,0.94)",
+    borderColor: "rgba(255,255,255,0.9)",
+    borderRadius: radius.card,
     borderWidth: 1,
     flex: 1,
     marginBottom: spacing.sm,
-    padding: spacing.lg,
+    padding: spacing.xl,
     ...shadows.soft,
   },
   activityHeader: {
-    alignItems: "center",
+    alignItems: "flex-start",
     flexDirection: "row",
     gap: spacing.sm,
     justifyContent: "space-between",
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
-  activityHeaderCopy: {
+  activityTitleGroup: {
+    flex: 1,
+  },
+  activityMetaRow: {
     alignItems: "center",
     flexDirection: "row",
-    flex: 1,
     flexWrap: "wrap",
     gap: spacing.sm,
+    marginTop: spacing.sm,
   },
   regenerateButton: {
     alignItems: "center",
@@ -466,14 +486,19 @@ const styles = StyleSheet.create({
     width: 34,
   },
   timeText: {
-    color: colors.teal700,
+    backgroundColor: colors.cream,
+    borderRadius: radius.pill,
+    color: colors.gold600,
     fontSize: 12,
     fontWeight: "800",
+    overflow: "hidden",
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
   },
   activityType: {
-    backgroundColor: colors.slate100,
+    backgroundColor: colors.teal50,
     borderRadius: radius.pill,
-    color: colors.slate600,
+    color: colors.teal700,
     fontSize: 11,
     fontWeight: "800",
     overflow: "hidden",
@@ -482,8 +507,8 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   costChip: {
-    backgroundColor: colors.amber50,
-    borderColor: "#fde68a",
+    backgroundColor: colors.white,
+    borderColor: colors.gold100,
     borderRadius: radius.pill,
     borderWidth: 1,
     paddingHorizontal: spacing.sm,
@@ -496,9 +521,9 @@ const styles = StyleSheet.create({
   },
   activityTitle: {
     color: colors.slate900,
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: "800",
-    lineHeight: 21,
+    lineHeight: 23,
   },
   activityDescription: {
     color: colors.slate600,

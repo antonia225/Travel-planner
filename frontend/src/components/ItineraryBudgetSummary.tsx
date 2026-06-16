@@ -1,8 +1,8 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { WalletCards } from "lucide-react-native";
+import { PiggyBank, UsersRound, WalletCards } from "lucide-react-native";
 
-import { colors, radius, spacing } from "../theme/designSystem";
+import { colors, radius, shadows, spacing } from "../theme/designSystem";
 
 const EURO = "\u20ac";
 
@@ -37,59 +37,82 @@ export default function ItineraryBudgetSummary({
 
   return (
     <View style={styles.budgetSummary}>
-      <WalletCards color={colors.teal700} size={18} strokeWidth={2.3} />
-      <View style={styles.budgetSummaryCopy}>
-        <Text style={styles.budgetSummaryLabel}>Activities total cost</Text>
-        <Text style={styles.budgetSummaryValue}>
-          {EURO}
-          {totalCostEur}
-          {budgetText}
-        </Text>
+      <View style={styles.summaryHeader}>
+        <View style={styles.iconBadge}>
+          <WalletCards color={colors.white} size={20} strokeWidth={2.3} />
+        </View>
+        <View style={styles.budgetSummaryCopy}>
+          <Text style={styles.budgetSummaryLabel}>Activities total cost</Text>
+          <Text style={styles.budgetSummaryValue}>
+            {EURO}
+            {totalCostEur}
+            {budgetText}
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.metricsRow}>
         {travelerText ? (
-          <Text style={styles.travelerText}>For {travelerText}</Text>
+          <View style={styles.metricCard}>
+            <UsersRound color={colors.teal700} size={16} strokeWidth={2.3} />
+            <Text style={styles.metricLabel}>Travelers</Text>
+            <Text style={styles.metricValue}>For {travelerText}</Text>
+          </View>
         ) : null}
         {finalCostWithAlternatives !== null ? (
-          <Text style={styles.finalCostText}>
-            Final cost with alternatives{" "}
-            <Text style={styles.finalCostAmount}>
-              {EURO}
-              {finalCostWithAlternatives}
+          <View style={styles.metricCard}>
+            <PiggyBank color={colors.amber600} size={16} strokeWidth={2.3} />
+            <Text style={styles.finalCostText}>
+              Final cost with alternatives{" "}
+              <Text style={styles.finalCostAmount}>
+                {EURO}
+                {finalCostWithAlternatives}
+              </Text>
             </Text>
-          </Text>
+          </View>
+        ) : null}
+        {hasSavings ? (
+          <View style={[styles.metricCard, styles.savingsBadge]}>
+            <Text style={styles.savingsLabel}>Save</Text>
+            <Text style={styles.savingsValue}>
+              {EURO}
+              {estimatedSavingsEur}
+            </Text>
+          </View>
         ) : null}
       </View>
-      {hasSavings ? (
-        <View style={styles.savingsBadge}>
-          <Text style={styles.savingsLabel}>Save</Text>
-          <Text style={styles.savingsValue}>
-            {EURO}
-            {estimatedSavingsEur}
-          </Text>
-          <Text style={styles.savingsSubtext}>with alternatives</Text>
-        </View>
-      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   budgetSummary: {
-    alignItems: "center",
-    backgroundColor: colors.teal50,
-    borderColor: colors.teal200,
-    borderRadius: radius.lg,
+    backgroundColor: colors.white,
+    borderColor: "rgba(255,255,255,0.86)",
+    borderRadius: radius.card,
     borderWidth: 1,
+    marginBottom: spacing.lg,
+    padding: spacing.lg,
+    ...shadows.soft,
+  },
+  summaryHeader: {
+    alignItems: "center",
     flexDirection: "row",
     gap: spacing.md,
-    marginBottom: spacing.lg,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+  },
+  iconBadge: {
+    alignItems: "center",
+    backgroundColor: colors.ink,
+    borderRadius: radius.lg,
+    height: 46,
+    justifyContent: "center",
+    width: 46,
   },
   budgetSummaryCopy: {
     flex: 1,
   },
   budgetSummaryLabel: {
-    color: colors.teal700,
+    color: colors.gold600,
     fontSize: 11,
     fontWeight: "800",
     letterSpacing: 1.2,
@@ -97,35 +120,59 @@ const styles = StyleSheet.create({
   },
   budgetSummaryValue: {
     color: colors.slate900,
-    fontSize: 16,
+    fontSize: 19,
     fontWeight: "800",
     lineHeight: 22,
     marginTop: 2,
   },
-  finalCostText: {
-    color: colors.teal700,
+  metricsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+  },
+  metricCard: {
+    backgroundColor: colors.cream,
+    borderColor: colors.slate100,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexGrow: 1,
+    minWidth: 118,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  metricLabel: {
+    color: colors.slate500,
+    fontSize: 10,
+    fontWeight: "800",
+    lineHeight: 13,
+    marginTop: 3,
+    textTransform: "uppercase",
+  },
+  metricValue: {
+    color: colors.slate900,
     fontSize: 13,
     fontWeight: "800",
     lineHeight: 18,
-    marginTop: spacing.xs,
+    marginTop: 2,
   },
-  travelerText: {
-    color: colors.slate600,
-    fontSize: 13,
-    fontWeight: "700",
-    lineHeight: 18,
-    marginTop: spacing.xs,
+  finalCostText: {
+    color: colors.slate500,
+    fontSize: 10,
+    fontWeight: "800",
+    lineHeight: 15,
+    textTransform: "uppercase",
   },
   finalCostAmount: {
     color: colors.amber600,
+    fontSize: 14,
+    fontWeight: "800",
+    lineHeight: 18,
+    marginTop: 2,
   },
   savingsBadge: {
-    alignItems: "center",
     backgroundColor: colors.teal600,
-    borderRadius: radius.md,
-    minWidth: 72,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+    borderColor: colors.teal600,
   },
   savingsLabel: {
     color: colors.teal100,
@@ -136,14 +183,8 @@ const styles = StyleSheet.create({
   },
   savingsValue: {
     color: colors.white,
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: "800",
-    lineHeight: 21,
-  },
-  savingsSubtext: {
-    color: colors.teal100,
-    fontSize: 10,
-    fontWeight: "800",
-    lineHeight: 13,
+    lineHeight: 22,
   },
 });

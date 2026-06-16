@@ -17,7 +17,7 @@ export default function ScreenWrapper({
   bgClassName = "bg-slate-50",
 }: Props) {
   return (
-    <SafeAreaView className={`flex-1 ${bgClassName}`}>
+    <SafeAreaView edges={["top", "left", "right"]} className={`flex-1 ${bgClassName}`}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         className="flex-1"

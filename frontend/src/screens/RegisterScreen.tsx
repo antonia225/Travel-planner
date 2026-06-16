@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import {
   ActivityIndicator,
+  ImageBackground,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -17,25 +18,34 @@ import { checkPassword, allRulesMet } from "../utils/validation";
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
 const C = {
-  teal700:   "#0f766e",
-  teal600:   "#0d9488",
-  teal200:   "#99f6e4",
-  teal100:   "#ccfbf1",
-  teal50:    "#f0fdfa",
-  tealBorder:"#5eead4",
-  slate900:  "#0f172a",
-  slate700:  "#334155",
-  slate500:  "#64748b",
-  slate400:  "#94a3b8",
-  slate200:  "#e2e8f0",
-  slate100:  "#f1f5f9",
-  slate50:   "#f8fafc",
+  teal700:   "#0b3b47",
+  teal600:   "#0f8b8d",
+  teal200:   "#8bd8d2",
+  teal100:   "#c8f1ec",
+  teal50:    "#eefbf8",
+  tealBorder:"#6fd6ca",
+  slate900:  "#10202b",
+  slate700:  "#344955",
+  slate500:  "#6f7f87",
+  slate400:  "#9aa7ad",
+  slate200:  "#dde5e8",
+  slate100:  "#edf2f3",
+  slate50:   "#fbf7ef",
+  ink:        "#081a24",
+  gold100:   "#f7df9e",
+  gold600:   "#a86f16",
   white:     "#ffffff",
   red500:    "#ef4444",
   red700:    "#b91c1c",
   red50:     "#fef2f2",
   redBorder: "#fca5a5",
 };
+
+const DISPLAY_FONT = Platform.select({
+  ios: "Georgia",
+  android: "serif",
+  default: undefined,
+});
 
 // ─── Rule row ─────────────────────────────────────────────────────────────────
 
@@ -100,7 +110,7 @@ export default function RegisterScreen({
   };
 
   return (
-    <SafeAreaView style={s.root}>
+    <SafeAreaView edges={["top", "left", "right"]} style={s.root}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -112,31 +122,21 @@ export default function RegisterScreen({
         >
           {/* ── Hero ── */}
           <View style={s.hero}>
+            <ImageBackground
+              source={require("../../assets/travel-editorial-hero.png")}
+              resizeMode="cover"
+              style={s.heroImage}
+              imageStyle={s.heroImageInner}
+            >
+              <View style={s.heroImageScrim} />
+            </ImageBackground>
 
-            {/* Top row: badge + tagline pill */}
-            <View style={s.heroTopRow}>
-              {/* App icon badge */}
-              <View style={s.iconBadge}>
-                <Text style={{ fontSize: 28 }}>✈️</Text>
-              </View>
-            </View>
-
-            <Text style={s.heroHeading}>Join the{"\n"}Journey</Text>
+            <Text style={s.heroKicker}>Private trip studio</Text>
+            <Text style={s.heroHeading}>Join the{"\n"}journey</Text>
             <Text style={s.heroSub}>
-              Create your free account and start exploring the world
+              Create a private space for curated journeys, refined budgets,
+              and memorable stays.
             </Text>
-
-            {/* Decorative stat row */}
-            <View style={s.statRow}>
-              {[["🌍","50+ countries"],["📍","Custom trips"],["⭐","4.9 rating"]].map(
-                ([icon, label]) => (
-                  <View key={label} style={s.stat}>
-                    <Text style={s.statIcon}>{icon}</Text>
-                    <Text style={s.statLabel}>{label}</Text>
-                  </View>
-                )
-              )}
-            </View>
           </View>
 
           {/* ── Form card ── */}
@@ -247,51 +247,77 @@ export default function RegisterScreen({
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: C.teal700 },
+  root: { flex: 1, backgroundColor: C.slate50 },
 
   // Hero
   hero: {
-    backgroundColor: C.teal700,
+    backgroundColor: C.ink,
+    borderRadius: 28,
+    marginHorizontal: 18,
+    marginTop: 16,
+    minHeight: 302,
+    overflow: "hidden",
     paddingHorizontal: 28,
-    paddingTop: 36,
-    paddingBottom: 60,
+    paddingTop: 42,
+    paddingBottom: 34,
+    shadowColor: C.ink,
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.18,
+    shadowRadius: 28,
+    elevation: 8,
   },
-  heroTopRow:   { flexDirection: "row", alignItems: "center", marginBottom: 24, gap: 12 },
-  iconBadge:    {
-    width: 56, height: 56, borderRadius: 16,
-    backgroundColor: "rgba(255,255,255,0.18)",
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.25)",
-    alignItems: "center", justifyContent: "center",
+  heroImage: {
+    bottom: 0,
+    left: 0,
+    opacity: 0.74,
+    position: "absolute",
+    right: 0,
+    top: 0,
   },
-  trustChip:    {
-    backgroundColor: "rgba(255,255,255,0.15)",
-    borderRadius: 20, borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
-    paddingHorizontal: 12, paddingVertical: 6,
+  heroImageInner: {
+    transform: [{ scale: 1.08 }],
   },
-  trustChipText: { color: C.teal100, fontSize: 12, fontWeight: "600" },
+  heroImageScrim: {
+    backgroundColor: "rgba(8, 26, 36, 0.48)",
+    flex: 1,
+  },
 
-  heroHeading: { fontSize: 40, fontWeight: "800", color: C.white, lineHeight: 46, marginBottom: 10 },
-  heroSub:     { fontSize: 14, color: C.teal200, lineHeight: 20, marginBottom: 28 },
-
-  statRow:  { flexDirection: "row", gap: 16 },
-  stat:     {
-    flex: 1, backgroundColor: "rgba(255,255,255,0.12)",
-    borderRadius: 12, padding: 10, alignItems: "center",
+  heroKicker: {
+    color: C.gold100,
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+    marginBottom: 8,
+    textTransform: "uppercase",
+    marginTop: 28,
   },
-  statIcon:  { fontSize: 18, marginBottom: 4 },
-  statLabel: { fontSize: 10, color: C.teal100, fontWeight: "600", textAlign: "center" },
+  heroHeading: {
+    fontFamily: DISPLAY_FONT,
+    fontSize: 38,
+    fontWeight: "700",
+    color: C.white,
+    lineHeight: 43,
+    marginBottom: 14,
+  },
+  heroSub:     { fontSize: 14, color: C.slate200, lineHeight: 21, maxWidth: 310 },
 
   // Card
   card: {
-    backgroundColor: C.slate50,
-    marginTop: -28,
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
+    backgroundColor: C.white,
+    borderColor: "rgba(168,111,22,0.12)",
+    borderRadius: 24,
+    borderWidth: 1,
+    marginHorizontal: 18,
+    marginTop: 18,
     paddingHorizontal: 24,
     paddingTop: 36,
     paddingBottom: 48,
-    flex: 1,
+    marginBottom: 28,
+    shadowColor: C.ink,
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.18,
+    shadowRadius: 28,
+    elevation: 8,
   },
 
   // Banners
@@ -325,14 +351,14 @@ const s = StyleSheet.create({
     letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8,
   },
   input: {
-    backgroundColor: C.white, color: C.slate900,
+    backgroundColor: "rgba(255,255,255,0.92)", color: C.slate900,
     borderRadius: 14, borderWidth: 1.5, borderColor: C.slate200,
     paddingHorizontal: 16, paddingVertical: 14,
     fontSize: 15, marginBottom: 20,
   },
   inputFocused: {
     borderColor: C.teal600,
-    backgroundColor: C.teal50,
+    backgroundColor: C.white,
   },
 
   // Strength card
@@ -359,7 +385,7 @@ const s = StyleSheet.create({
   },
   buttonActive:   { backgroundColor: C.teal600 },
   buttonDisabled: { backgroundColor: C.slate200 },
-  buttonText:         { color: C.white,     fontSize: 15, fontWeight: "700", letterSpacing: 0.4 },
+  buttonText:         { color: C.white,     fontSize: 15, fontWeight: "800", letterSpacing: 0.4 },
   buttonTextDisabled: { color: C.slate400 },
 
   // Switch to Login

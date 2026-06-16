@@ -10,14 +10,16 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  MapPin,
   Sparkles,
+  UsersRound,
+  WalletCards,
 } from "lucide-react-native";
 
 import AppCard from "./AppCard";
 import CustomInput from "./CustomInput";
 import PrimaryButton from "./PrimaryButton";
-import SectionHeader from "./SectionHeader";
-import { colors, radius, shadows, spacing } from "../theme/designSystem";
+import { colors, radius, shadows, spacing, typography } from "../theme/designSystem";
 
 type TripSearchData = {
   destination: string;
@@ -254,42 +256,72 @@ export default function TripSearchForm({
 
   return (
     <AppCard elevated style={styles.card}>
-      <SectionHeader eyebrow="AI planner" title="Plan a new trip" />
-
-      <CustomInput
-        label="Destination"
-        error={errors.destination}
-        placeholder="e.g. Paris, Rome, Tokyo"
-        value={destination}
-        onChangeText={setDestination}
-        autoCapitalize="words"
-        containerStyle={styles.field}
-      />
-
-      <View style={styles.fieldRow}>
-        {renderDateField("Start Date", startDate, "startDate")}
-        {renderDateField("End Date", endDate, "endDate")}
+      <View style={styles.formHero}>
+        <View style={styles.formHeroCopy}>
+          <Text style={styles.formHeroEyebrow}>Itinerary brief</Text>
+          <Text style={styles.formHeroTitle}>Travel that feels like a luxury</Text>
+          <Text style={styles.formHeroSub}>
+            A refined route shaped around dates, pace, party size, and spend.
+          </Text>
+        </View>
       </View>
 
-      <View style={styles.fieldRow}>
+      <View style={styles.destinationPanel}>
+        <View style={styles.panelHeaderLine}>
+          <MapPin color={colors.gold600} size={18} strokeWidth={2.2} />
+          <Text style={styles.panelLabel}>Destination</Text>
+        </View>
         <CustomInput
-          label="Travelers"
-          error={errors.travelers}
-          placeholder="2"
-          value={travelers}
-          onChangeText={setTravelers}
-          keyboardType="number-pad"
-          containerStyle={styles.splitField}
+          label="Where to"
+          error={errors.destination}
+          placeholder="e.g. Paris, Rome, Tokyo"
+          value={destination}
+          onChangeText={setDestination}
+          autoCapitalize="words"
+          containerStyle={styles.destinationInput}
         />
-        <CustomInput
-          label={`Budget (${EURO})`}
-          error={errors.budget}
-          placeholder="800"
-          value={budget}
-          onChangeText={setBudget}
-          keyboardType="numeric"
-          containerStyle={styles.splitField}
-        />
+      </View>
+
+      <View style={styles.datePanel}>
+        <View style={styles.panelHeaderLine}>
+          <CalendarDays color={colors.gold600} size={18} strokeWidth={2.2} />
+          <Text style={styles.panelLabel}>Travel dates</Text>
+        </View>
+        <View style={styles.fieldRow}>
+          {renderDateField("Start", startDate, "startDate")}
+          {renderDateField("End", endDate, "endDate")}
+        </View>
+      </View>
+
+      <View style={styles.detailGrid}>
+        <View style={styles.detailPanel}>
+          <View style={styles.detailPanelHeader}>
+            <UsersRound color={colors.gold600} size={17} strokeWidth={2.4} />
+            <Text style={styles.panelLabel}>Party</Text>
+          </View>
+          <CustomInput
+            label="Travelers"
+            error={errors.travelers}
+            placeholder="2"
+            value={travelers}
+            onChangeText={setTravelers}
+            keyboardType="number-pad"
+          />
+        </View>
+        <View style={styles.detailPanel}>
+          <View style={styles.detailPanelHeader}>
+            <WalletCards color={colors.gold600} size={17} strokeWidth={2.4} />
+            <Text style={styles.panelLabel}>Spend</Text>
+          </View>
+          <CustomInput
+            label={`Budget (${EURO})`}
+            error={errors.budget}
+            placeholder="800"
+            value={budget}
+            onChangeText={setBudget}
+            keyboardType="numeric"
+          />
+        </View>
       </View>
 
       <View style={styles.submitRow}>
@@ -419,20 +451,98 @@ export default function TripSearchForm({
 const styles = StyleSheet.create({
   card: {
     marginBottom: spacing.lg,
+    padding: 0,
+    overflow: "hidden",
+    borderColor: "rgba(155, 116, 50, 0.18)",
   },
-  field: {
-    marginBottom: spacing.lg,
+  formHero: {
+    backgroundColor: colors.cream,
+    borderBottomColor: "rgba(155, 116, 50, 0.16)",
+    borderBottomWidth: 1,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+  },
+  formHeroCopy: {
+    maxWidth: 520,
+  },
+  formHeroEyebrow: {
+    color: colors.gold600,
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+    marginBottom: 3,
+    textTransform: "uppercase",
+  },
+  formHeroTitle: {
+    color: colors.slate900,
+    fontFamily: typography.displayFontFamily,
+    fontSize: 24,
+    fontWeight: "700",
+    lineHeight: 31,
+  },
+  formHeroSub: {
+    color: colors.slate600,
+    fontSize: 14,
+    fontWeight: "500",
+    lineHeight: 20,
+    marginTop: spacing.xs,
+  },
+  destinationPanel: {
+    backgroundColor: colors.white,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.lg,
+  },
+  panelHeaderLine: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  destinationInput: {
+    width: "100%",
+  },
+  datePanel: {
+    backgroundColor: colors.white,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
   },
   fieldRow: {
     flexDirection: "row",
     gap: spacing.md,
-    marginBottom: spacing.lg,
+    marginTop: spacing.xs,
   },
-  splitField: {
+  detailGrid: {
+    backgroundColor: colors.white,
+    flexDirection: "row",
+    gap: spacing.md,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
+  },
+  detailPanel: {
+    backgroundColor: colors.cream,
+    borderColor: "rgba(155, 116, 50, 0.16)",
+    borderRadius: radius.lg,
+    borderWidth: 1,
     flex: 1,
+    padding: spacing.md,
+  },
+  detailPanelHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.xs,
+    marginBottom: spacing.md,
+  },
+  panelLabel: {
+    color: colors.gold600,
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1.1,
+    textTransform: "uppercase",
   },
   dateField: {
     flex: 1,
+    minWidth: 0,
   },
   label: {
     color: colors.slate500,
@@ -444,20 +554,20 @@ const styles = StyleSheet.create({
   },
   dateButton: {
     alignItems: "center",
-    backgroundColor: colors.white,
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
     borderColor: colors.slate200,
     borderRadius: radius.lg,
     borderWidth: 1.5,
     flexDirection: "row",
     gap: spacing.sm,
-    minHeight: 50,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
+    minHeight: 48,
+    paddingHorizontal: 10,
+    paddingVertical: 12,
   },
   dateButtonText: {
     color: colors.slate900,
     flex: 1,
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: "700",
   },
   inputError: {
@@ -472,9 +582,12 @@ const styles = StyleSheet.create({
   },
   submitRow: {
     alignItems: "stretch",
+    backgroundColor: colors.cream,
     flexDirection: "row",
     gap: spacing.md,
-    marginTop: spacing.xs,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.lg,
+    paddingTop: spacing.lg,
   },
   submitButton: {
     flex: 1,
@@ -492,7 +605,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
   },
   calendarCard: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.cream,
+    borderColor: "rgba(255,255,255,0.82)",
+    borderWidth: 1,
     borderRadius: 24,
     maxWidth: 420,
     padding: spacing.xl,
@@ -507,7 +622,9 @@ const styles = StyleSheet.create({
   },
   arrowButton: {
     alignItems: "center",
-    backgroundColor: colors.slate100,
+    backgroundColor: colors.white,
+    borderColor: colors.slate200,
+    borderWidth: 1,
     borderRadius: radius.lg,
     height: 44,
     justifyContent: "center",
@@ -545,9 +662,12 @@ const styles = StyleSheet.create({
   },
   selectedDayCell: {
     backgroundColor: colors.teal600,
+    ...shadows.soft,
   },
   todayDayCell: {
-    backgroundColor: colors.teal50,
+    backgroundColor: colors.white,
+    borderColor: colors.teal200,
+    borderWidth: 1,
   },
   dayText: {
     color: colors.slate700,
