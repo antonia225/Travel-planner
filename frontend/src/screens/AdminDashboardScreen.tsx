@@ -122,7 +122,7 @@ export default function AdminDashboardScreen({ navigation }: Props) {
 
   if (!canAccessAdmin(user)) {
     return (
-      <SafeAreaView style={styles.root}>
+      <SafeAreaView edges={["top", "left", "right"]} style={styles.root}>
         <View style={styles.centeredState}>
           <ShieldOff color={colors.white} size={34} strokeWidth={2.3} />
           <Text style={styles.centeredTitle}>Access restricted</Text>
@@ -141,7 +141,7 @@ export default function AdminDashboardScreen({ navigation }: Props) {
   }
 
   return (
-    <SafeAreaView style={styles.root}>
+    <SafeAreaView edges={["top", "left", "right"]} style={styles.root}>
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}

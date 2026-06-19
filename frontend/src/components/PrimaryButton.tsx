@@ -10,7 +10,7 @@ import {
   ViewStyle,
 } from "react-native";
 
-import { colors, radius, typography } from "../theme/designSystem";
+import { colors, radius, shadows, typography } from "../theme/designSystem";
 
 type Props = TouchableOpacityProps & {
   title: string;
@@ -86,14 +86,19 @@ const styles = StyleSheet.create({
   },
   primary: {
     backgroundColor: colors.teal600,
+    borderColor: "rgba(255,255,255,0.24)",
+    borderWidth: 1,
+    ...shadows.glow,
   },
   secondary: {
-    backgroundColor: colors.teal50,
+    backgroundColor: colors.white,
     borderColor: colors.teal200,
     borderWidth: 1,
   },
   destructive: {
-    backgroundColor: colors.red500,
+    backgroundColor: colors.coral600,
+    borderColor: "rgba(255,255,255,0.18)",
+    borderWidth: 1,
   },
   disabled: {
     backgroundColor: colors.slate200,
@@ -110,7 +115,7 @@ const styles = StyleSheet.create({
   text: {
     color: colors.white,
     fontSize: 15,
-    fontWeight: "700",
+    fontWeight: "800",
     letterSpacing: typography.buttonLetterSpacing,
   },
   secondaryText: {

@@ -85,7 +85,7 @@ export default function AdminStatsScreen({ navigation }: Props) {
 
   if (!canAccessAdmin(user)) {
     return (
-      <SafeAreaView style={styles.root}>
+      <SafeAreaView edges={["top", "left", "right"]} style={styles.root}>
         <View style={styles.centered}>
           <Text style={styles.title}>Access restricted</Text>
           <Text style={styles.subtitle}>
@@ -108,7 +108,7 @@ export default function AdminStatsScreen({ navigation }: Props) {
   const hasHiddenLogs = logs.length > COLLAPSED_AI_LOG_COUNT;
 
   return (
-    <SafeAreaView style={styles.root}>
+    <SafeAreaView edges={["top", "left", "right"]} style={styles.root}>
       <View style={styles.topBar}>
         <TouchableOpacity
           style={styles.iconButton}

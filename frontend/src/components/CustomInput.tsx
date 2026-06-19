@@ -58,7 +58,7 @@ export default function CustomInput({
 
 const styles = StyleSheet.create({
   label: {
-    color: colors.slate500,
+    color: colors.slate600,
     fontSize: 11,
     fontWeight: "700",
     letterSpacing: typography.labelLetterSpacing,
@@ -66,7 +66,7 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   input: {
-    backgroundColor: colors.white,
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
     borderColor: colors.slate200,
     borderRadius: radius.lg,
     borderWidth: 1.5,
@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   inputFocused: {
-    backgroundColor: colors.teal50,
+    backgroundColor: colors.white,
     borderColor: colors.teal600,
   },
   inputError: {

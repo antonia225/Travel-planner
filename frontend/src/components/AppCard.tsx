@@ -26,10 +26,10 @@ export default function AppCard({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.white,
+    backgroundColor: "rgba(255, 255, 255, 0.96)",
     borderRadius: radius.card,
     borderWidth: 1,
-    borderColor: colors.slate100,
+    borderColor: "rgba(255, 255, 255, 0.78)",
     padding: spacing.xl,
   },
 });

@@ -109,7 +109,7 @@ export default function App() {
   return (
     <AuthProvider>
       <RootNavigator />
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
     </AuthProvider>
   );
 }

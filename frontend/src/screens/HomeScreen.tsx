@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  ImageBackground,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,7 +20,6 @@ import {
   ShieldCheck,
   Sparkles,
   UserRound,
-  WalletCards,
 } from "lucide-react-native";
 
 import AppCard from "../components/AppCard";
@@ -42,7 +42,7 @@ import type {
   BudgetOptimizerResponse,
   ItineraryResponse,
 } from "../services/api";
-import { colors, radius, shadows, spacing } from "../theme/designSystem";
+import { colors, radius, shadows, spacing, typography } from "../theme/designSystem";
 import {
   getVisibleBudgetOptimizationSavings,
   removeBudgetRecommendationForActivity,
@@ -111,7 +111,7 @@ function countTripDays(startDate: string, endDate: string) {
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) {
-    return error.message;
+    return sanitizeUserErrorMessage(error.message);
   }
 
   return "Something went wrong.";
@@ -123,11 +123,11 @@ function isAbortError(error: unknown) {
 
 function formatBackendDetail(detail: unknown) {
   if (typeof detail === "string") {
-    return detail;
+    return sanitizeUserErrorMessage(detail);
   }
 
   if (Array.isArray(detail)) {
-    return detail
+    const message = detail
       .map((item) => {
         if (
           item &&
@@ -141,13 +141,49 @@ function formatBackendDetail(detail: unknown) {
         return JSON.stringify(item);
       })
       .join("; ");
+
+    return sanitizeUserErrorMessage(message);
   }
 
   if (detail) {
-    return JSON.stringify(detail);
+    return "The server could not process this request. Please check the trip details and try again.";
   }
 
   return null;
+}
+
+function sanitizeUserErrorMessage(message: string) {
+  const trimmed = message.trim();
+  if (!trimmed) {
+    return "Something went wrong. Please try again.";
+  }
+
+  const lower = trimmed.toLowerCase();
+  const looksIncompleteItinerary =
+    lower.includes("google ai studio response must include") ||
+    lower.includes("generated itinerary must include exactly") ||
+    lower.includes("generated itinerary must include sequential");
+
+  if (looksIncompleteItinerary) {
+    return "The AI generated an incomplete itinerary. Please try again.";
+  }
+
+  const looksTechnical =
+    trimmed.startsWith("{") ||
+    trimmed.startsWith("[") ||
+    lower.includes("google ai studio returned an error") ||
+    lower.includes("generation_config") ||
+    lower.includes("generativelanguage.googleapis.com") ||
+    lower.includes("traceback") ||
+    lower.includes("httperror") ||
+    lower.includes("pydantic") ||
+    lower.includes("validationerror");
+
+  if (looksTechnical) {
+    return "The AI service could not generate this trip right now. Please try again in a moment.";
+  }
+
+  return trimmed.length > 180 ? `${trimmed.slice(0, 177).trim()}...` : trimmed;
 }
 
 function formatIsoDate(date: Date) {
@@ -664,7 +700,7 @@ export default function HomeScreen({ navigation }: Props) {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.root}>
+      <SafeAreaView edges={["top", "left", "right"]} style={styles.root}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.white} />
           <Text style={styles.loadingText}>Loading...</Text>
@@ -674,94 +710,98 @@ export default function HomeScreen({ navigation }: Props) {
   }
 
   return (
-    <SafeAreaView style={styles.root}>
+    <SafeAreaView edges={["top", "left", "right"]} style={styles.root}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.hero}>
-          <View style={styles.heroTopRow}>
-            <View style={styles.iconBadge}>
-              <Compass color={colors.white} size={30} strokeWidth={2.2} />
-            </View>
-
-            <View style={styles.headerActions}>
-              {canAccessAdmin(user) ? (
-                <TouchableOpacity
-                  style={styles.headerButton}
-                  activeOpacity={0.8}
-                  onPress={() => navigation.navigate("AdminDashboard")}
-                >
-                  <ShieldCheck
-                    color={colors.white}
-                    size={17}
-                    strokeWidth={2.3}
-                  />
-                  <Text style={styles.headerButtonText}>Admin</Text>
-                </TouchableOpacity>
-              ) : null}
-
-              <TouchableOpacity
-                style={styles.headerButton}
-                activeOpacity={0.8}
-                onPress={() => navigation.navigate("Library")}
-              >
-                <BookOpen color={colors.white} size={17} strokeWidth={2.3} />
-                <Text style={styles.headerButtonText}>Library</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.headerButton, styles.profileButton]}
-                activeOpacity={0.8}
-                onPress={() => navigation.navigate("Profile")}
-              >
-                <UserRound color={colors.white} size={17} strokeWidth={2.3} />
-                <Text style={styles.headerButtonText}>Profile</Text>
-              </TouchableOpacity>
-            </View>
+        <View style={styles.topBar}>
+          <View style={styles.brandMark}>
+            <Compass color={colors.teal700} size={22} strokeWidth={2.3} />
           </View>
+          <View style={styles.topBarActions}>
+            {canAccessAdmin(user) ? (
+              <TouchableOpacity
+                style={styles.navIconButton}
+                activeOpacity={0.82}
+                onPress={() => navigation.navigate("AdminDashboard")}
+              >
+                <ShieldCheck color={colors.slate700} size={18} strokeWidth={2.3} />
+              </TouchableOpacity>
+            ) : null}
+            <TouchableOpacity
+              style={styles.navIconButton}
+              activeOpacity={0.82}
+              onPress={() => navigation.navigate("Library")}
+            >
+              <BookOpen color={colors.slate700} size={18} strokeWidth={2.3} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.navIconButton}
+              activeOpacity={0.82}
+              onPress={() => navigation.navigate("Profile")}
+            >
+              <UserRound color={colors.slate700} size={18} strokeWidth={2.3} />
+            </TouchableOpacity>
+          </View>
+        </View>
 
-          <Text style={styles.heroKicker}>Trip planner</Text>
-          <Text style={styles.heroTitle}>
-            Where to next,{"\n"}
-            {user?.name || "Traveler"}?
-          </Text>
-          <Text style={styles.heroSub}>
-            Generate an itinerary, review the timeline, and save the trip when
-            it feels right.
-          </Text>
-
-          <View style={styles.statRow}>
-            <View style={[styles.stat, styles.statTeal]}>
-              <Sparkles color={colors.teal700} size={18} strokeWidth={2.2} />
-              <Text style={styles.statLabelDark}>AI planner</Text>
-            </View>
-            <View style={[styles.stat, styles.statSky]}>
-              <WalletCards color={colors.sky600} size={18} strokeWidth={2.2} />
-              <Text style={styles.statLabelDark}>Budget-aware</Text>
-            </View>
-            <View style={[styles.stat, styles.statAmber]}>
-              <Heart color={colors.amber600} size={18} strokeWidth={2.2} />
-              <Text style={styles.statLabelDark}>
-                {user?.interests.length || 0} interests
+        <View style={styles.coverStory}>
+          <ImageBackground
+            source={require("../../assets/travel-editorial-hero.png")}
+            resizeMode="cover"
+            style={styles.coverImage}
+            imageStyle={styles.coverImageInner}
+          >
+            <View style={styles.coverScrim} />
+            <View style={styles.coverCopy}>
+              <Text style={styles.heroKicker}>Curated travel studio</Text>
+              <Text style={styles.heroTitle}>
+                Journeys that feel like luxury.
               </Text>
+              <Text style={styles.heroSub}>
+                Curated routes, refined pacing, and budget clarity for escapes
+                that feel considered from the first step.
+              </Text>
+            </View>
+          </ImageBackground>
+          <View style={styles.welcomeCard}>
+            <Text style={styles.welcomeLabel}>Concierge profile</Text>
+            <Text style={styles.welcomeName}>{user?.name || "Traveler"}</Text>
+            <View style={styles.welcomeMetaRow}>
+              <View style={styles.welcomeMeta}>
+                <Sparkles color={colors.gold600} size={15} strokeWidth={2.4} />
+                <Text style={styles.welcomeMetaText}>AI planner</Text>
+              </View>
+              <View style={styles.welcomeMeta}>
+                <Heart color={colors.gold600} size={15} strokeWidth={2.4} />
+                <Text style={styles.welcomeMetaText}>
+                  {user?.interests.length || 0} interests
+                </Text>
+              </View>
             </View>
           </View>
         </View>
 
-        <View style={styles.contentSheet}>
+        <View style={styles.plannerSection}>
+          <Text style={styles.sectionLabel}>Plan the escape</Text>
           <TripSearchForm
             isSubmitting={isGeneratingTrip}
             onCancel={handleCancelTripGeneration}
             onSubmit={handleTripSearch}
           />
+        </View>
 
+        <View style={styles.contentFlow}>
           {tripError ? (
             <View style={styles.errorCard}>
               <AlertCircle color={colors.red700} size={22} strokeWidth={2.4} />
               <View style={styles.errorCopy}>
-                <Text style={styles.errorTitle}>Trip generation failed</Text>
-                <Text style={styles.errorMessage}>{tripError}</Text>
+                <Text style={styles.errorTitle}>Could not generate itinerary</Text>
+                <Text style={styles.errorMessage} numberOfLines={3}>
+                  {tripError}
+                </Text>
+                <Text style={styles.errorHint}>Check the trip details, then try again.</Text>
               </View>
             </View>
           ) : null}
@@ -877,11 +917,16 @@ export default function HomeScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   root: {
-    backgroundColor: colors.teal700,
+    backgroundColor: colors.slate50,
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 0,
+    alignSelf: "center",
+    maxWidth: 760,
+    paddingBottom: 48,
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    width: "100%",
   },
   loadingContainer: {
     alignItems: "center",
@@ -894,147 +939,178 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginTop: spacing.lg,
   },
-  hero: {
-    backgroundColor: colors.teal700,
-    paddingBottom: 60,
-    paddingHorizontal: 24,
-    paddingTop: 28,
-  },
-  heroTopRow: {
+  topBar: {
     alignItems: "center",
     flexDirection: "row",
-    gap: spacing.md,
     justifyContent: "space-between",
-    marginBottom: spacing.xxl,
+    marginBottom: spacing.lg,
   },
-  iconBadge: {
+  brandMark: {
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.18)",
-    borderColor: "rgba(255,255,255,0.25)",
-    borderRadius: 16,
+    backgroundColor: colors.white,
+    borderColor: colors.slate200,
+    borderRadius: radius.pill,
     borderWidth: 1,
-    height: 56,
+    height: 44,
     justifyContent: "center",
-    width: 56,
+    width: 44,
+    ...shadows.soft,
   },
-  headerActions: {
+  topBarActions: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    flexShrink: 1,
     gap: spacing.sm,
-    justifyContent: "flex-end",
   },
-  headerButton: {
+  navIconButton: {
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.16)",
-    borderColor: "rgba(255,255,255,0.25)",
-    borderRadius: radius.lg,
+    backgroundColor: colors.white,
+    borderColor: colors.slate200,
+    borderRadius: radius.pill,
     borderWidth: 1,
-    flexDirection: "row",
-    gap: spacing.xs,
-    minHeight: 42,
-    paddingHorizontal: spacing.md,
+    height: 42,
+    justifyContent: "center",
+    width: 42,
   },
-  profileButton: {
-    backgroundColor: "rgba(255,255,255,0.22)",
+  coverStory: {
+    gap: 0,
   },
-  headerButtonText: {
-    color: colors.white,
-    fontSize: 13,
-    fontWeight: "800",
+  coverImage: {
+    borderRadius: 28,
+    height: 356,
+    justifyContent: "flex-end",
+    overflow: "hidden",
+    ...shadows.card,
+  },
+  coverImageInner: {
+    borderRadius: 28,
+  },
+  coverScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(24, 49, 58, 0.28)",
+  },
+  coverCopy: {
+    paddingHorizontal: spacing.xxl,
+    paddingBottom: 68,
+    paddingTop: spacing.xxxl,
   },
   heroKicker: {
-    color: colors.teal100,
+    color: colors.cream,
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+    marginBottom: spacing.md,
+    textTransform: "uppercase",
+  },
+  heroTitle: {
+    color: colors.white,
+    fontFamily: typography.displayFontFamily,
+    fontSize: 32,
+    fontWeight: "700",
+    lineHeight: 38,
+    marginBottom: spacing.md,
+  },
+  heroSub: {
+    color: colors.slate100,
+    fontSize: 14,
+    fontWeight: "600",
+    lineHeight: 21,
+  },
+  welcomeCard: {
+    backgroundColor: "rgba(255, 250, 240, 0.98)",
+    borderColor: "rgba(155, 116, 50, 0.18)",
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    marginHorizontal: spacing.md,
+    marginTop: -34,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.lg,
+    ...shadows.soft,
+  },
+  welcomeLabel: {
+    color: colors.gold600,
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+  welcomeName: {
+    color: colors.slate900,
+    fontFamily: typography.displayFontFamily,
+    fontSize: 22,
+    fontWeight: "700",
+    lineHeight: 28,
+    marginTop: 3,
+  },
+  welcomeMetaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  welcomeMeta: {
+    alignItems: "center",
+    backgroundColor: colors.white,
+    borderColor: "rgba(155, 116, 50, 0.14)",
+    borderWidth: 1,
+    borderRadius: radius.pill,
+    flexDirection: "row",
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  welcomeMetaText: {
+    color: colors.slate700,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  plannerSection: {
+    marginTop: spacing.xxl,
+  },
+  sectionLabel: {
+    color: colors.gold600,
     fontSize: 11,
     fontWeight: "800",
     letterSpacing: 1.2,
     marginBottom: spacing.sm,
     textTransform: "uppercase",
   },
-  heroTitle: {
-    color: colors.white,
-    fontSize: 36,
-    fontWeight: "800",
-    lineHeight: 42,
-    marginBottom: spacing.md,
-  },
-  heroSub: {
-    color: colors.teal200,
-    fontSize: 14,
-    fontWeight: "500",
-    lineHeight: 20,
-    marginBottom: spacing.xxl,
-  },
-  statRow: {
-    flexDirection: "row",
-    gap: spacing.md,
-  },
-  stat: {
-    alignItems: "center",
-    borderRadius: radius.md,
-    borderWidth: 1,
-    flex: 1,
-    gap: 5,
-    minHeight: 62,
-    padding: spacing.md,
-  },
-  statTeal: {
-    backgroundColor: colors.teal50,
-    borderColor: colors.teal200,
-  },
-  statSky: {
-    backgroundColor: colors.sky50,
-    borderColor: "#bae6fd",
-  },
-  statAmber: {
-    backgroundColor: colors.amber50,
-    borderColor: "#fde68a",
-  },
-  statLabelDark: {
-    color: colors.slate700,
-    fontSize: 10,
-    fontWeight: "800",
-    textAlign: "center",
-  },
-  contentSheet: {
-    backgroundColor: colors.slate50,
-    borderTopLeftRadius: radius.sheet,
-    borderTopRightRadius: radius.sheet,
+  contentFlow: {
     gap: spacing.lg,
-    marginTop: -28,
-    minHeight: 520,
-    paddingBottom: 42,
-    paddingHorizontal: 20,
-    paddingTop: 28,
+    marginTop: spacing.lg,
   },
   sectionCard: {
     marginBottom: 0,
+    padding: spacing.lg,
   },
   errorCard: {
     alignItems: "flex-start",
-    backgroundColor: colors.red50,
+    backgroundColor: "#fff7f6",
     borderColor: colors.redBorder,
-    borderRadius: radius.card,
+    borderRadius: radius.lg,
     borderWidth: 1,
     flexDirection: "row",
-    gap: spacing.md,
-    padding: spacing.xl,
-    ...shadows.soft,
+    gap: spacing.sm,
+    padding: spacing.lg,
   },
   errorCopy: {
     flex: 1,
   },
   errorTitle: {
     color: colors.red700,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "800",
-    marginBottom: spacing.xs,
+    marginBottom: 4,
   },
   errorMessage: {
     color: colors.red700,
     fontSize: 13,
+    fontWeight: "500",
+    lineHeight: 18,
+  },
+  errorHint: {
+    color: colors.slate500,
+    fontSize: 12,
     fontWeight: "600",
-    lineHeight: 19,
+    marginTop: spacing.xs,
   },
   saveTripButton: {
     minHeight: 40,

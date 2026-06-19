@@ -1,7 +1,7 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { colors, spacing } from "../theme/designSystem";
+import { colors, spacing, typography } from "../theme/designSystem";
 
 type Props = {
   title: string;
@@ -33,7 +33,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   eyebrow: {
-    color: colors.teal700,
+    color: colors.gold600,
     fontSize: 11,
     fontWeight: "800",
     letterSpacing: 1.2,
@@ -42,8 +42,9 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.slate900,
-    fontSize: 18,
-    fontWeight: "800",
-    lineHeight: 24,
+    fontFamily: typography.displayFontFamily,
+    fontSize: 21,
+    fontWeight: "700",
+    lineHeight: 27,
   },
 });

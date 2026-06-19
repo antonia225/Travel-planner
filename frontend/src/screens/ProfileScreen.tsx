@@ -247,14 +247,14 @@ export default function ProfileScreen({ navigation }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.root}>
+    <SafeAreaView edges={["top", "left", "right"]} style={styles.root}>
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
           activeOpacity={0.8}
           onPress={navigation.goBack}
         >
-          <ArrowLeft color={colors.white} size={22} strokeWidth={2.4} />
+          <ArrowLeft color={colors.slate700} size={22} strokeWidth={2.4} />
         </TouchableOpacity>
 
         <View style={styles.headerCopy}>
@@ -530,22 +530,22 @@ export default function ProfileScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   root: {
-    backgroundColor: colors.teal700,
+    backgroundColor: colors.slate50,
     flex: 1,
   },
   header: {
     alignItems: "center",
     flexDirection: "row",
     gap: spacing.md,
-    paddingBottom: spacing.xl,
-    paddingHorizontal: 20,
-    paddingTop: spacing.lg,
+    paddingBottom: spacing.lg,
+    paddingHorizontal: 18,
+    paddingTop: spacing.sm,
   },
   backButton: {
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.16)",
-    borderColor: "rgba(255,255,255,0.25)",
-    borderRadius: radius.lg,
+    backgroundColor: colors.white,
+    borderColor: colors.slate200,
+    borderRadius: radius.pill,
     borderWidth: 1,
     height: 44,
     justifyContent: "center",
@@ -555,22 +555,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerKicker: {
-    color: colors.teal100,
-    fontSize: 12,
-    fontWeight: "700",
+    color: colors.gold600,
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1,
     marginBottom: 3,
   },
   headerTitle: {
-    color: colors.white,
-    fontSize: 28,
+    color: colors.slate900,
+    fontSize: 26,
     fontWeight: "800",
     lineHeight: 34,
   },
   headerBadge: {
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.16)",
-    borderColor: "rgba(255,255,255,0.25)",
-    borderRadius: radius.lg,
+    backgroundColor: colors.white,
+    borderColor: colors.slate200,
+    borderRadius: radius.pill,
     borderWidth: 1,
     height: 44,
     justifyContent: "center",
@@ -578,27 +579,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   headerBadgeText: {
-    color: colors.white,
+    color: colors.teal700,
     fontSize: 14,
     fontWeight: "800",
   },
   scroll: {
-    backgroundColor: colors.slate50,
-    borderTopLeftRadius: radius.sheet,
-    borderTopRightRadius: radius.sheet,
     flex: 1,
   },
   scrollContent: {
     gap: spacing.lg,
-    paddingBottom: 42,
-    paddingHorizontal: 20,
-    paddingTop: 28,
+    paddingBottom: 36,
+    paddingHorizontal: 18,
+    paddingTop: spacing.sm,
   },
   summaryCard: {
     alignItems: "center",
     backgroundColor: colors.white,
     borderColor: colors.slate100,
-    borderRadius: radius.card,
+    borderRadius: 24,
     borderWidth: 1,
     flexDirection: "row",
     gap: spacing.md,
@@ -607,11 +605,11 @@ const styles = StyleSheet.create({
   },
   avatar: {
     alignItems: "center",
-    backgroundColor: colors.teal600,
-    borderRadius: 22,
-    height: 56,
+    backgroundColor: colors.teal700,
+    borderRadius: 28,
+    height: 58,
     justifyContent: "center",
-    width: 56,
+    width: 58,
   },
   avatarText: {
     color: colors.white,
