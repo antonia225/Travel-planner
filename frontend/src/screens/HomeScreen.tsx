@@ -111,7 +111,7 @@ function countTripDays(startDate: string, endDate: string) {
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) {
-    return error.message;
+    return sanitizeUserErrorMessage(error.message);
   }
 
   return "Something went wrong.";
@@ -123,11 +123,11 @@ function isAbortError(error: unknown) {
 
 function formatBackendDetail(detail: unknown) {
   if (typeof detail === "string") {
-    return detail;
+    return sanitizeUserErrorMessage(detail);
   }
 
   if (Array.isArray(detail)) {
-    return detail
+    const message = detail
       .map((item) => {
         if (
           item &&
@@ -141,13 +141,49 @@ function formatBackendDetail(detail: unknown) {
         return JSON.stringify(item);
       })
       .join("; ");
+
+    return sanitizeUserErrorMessage(message);
   }
 
   if (detail) {
-    return JSON.stringify(detail);
+    return "The server could not process this request. Please check the trip details and try again.";
   }
 
   return null;
+}
+
+function sanitizeUserErrorMessage(message: string) {
+  const trimmed = message.trim();
+  if (!trimmed) {
+    return "Something went wrong. Please try again.";
+  }
+
+  const lower = trimmed.toLowerCase();
+  const looksIncompleteItinerary =
+    lower.includes("google ai studio response must include") ||
+    lower.includes("generated itinerary must include exactly") ||
+    lower.includes("generated itinerary must include sequential");
+
+  if (looksIncompleteItinerary) {
+    return "The AI generated an incomplete itinerary. Please try again.";
+  }
+
+  const looksTechnical =
+    trimmed.startsWith("{") ||
+    trimmed.startsWith("[") ||
+    lower.includes("google ai studio returned an error") ||
+    lower.includes("generation_config") ||
+    lower.includes("generativelanguage.googleapis.com") ||
+    lower.includes("traceback") ||
+    lower.includes("httperror") ||
+    lower.includes("pydantic") ||
+    lower.includes("validationerror");
+
+  if (looksTechnical) {
+    return "The AI service could not generate this trip right now. Please try again in a moment.";
+  }
+
+  return trimmed.length > 180 ? `${trimmed.slice(0, 177).trim()}...` : trimmed;
 }
 
 function formatIsoDate(date: Date) {
@@ -761,8 +797,11 @@ export default function HomeScreen({ navigation }: Props) {
             <View style={styles.errorCard}>
               <AlertCircle color={colors.red700} size={22} strokeWidth={2.4} />
               <View style={styles.errorCopy}>
-                <Text style={styles.errorTitle}>Trip generation failed</Text>
-                <Text style={styles.errorMessage}>{tripError}</Text>
+                <Text style={styles.errorTitle}>Could not generate itinerary</Text>
+                <Text style={styles.errorMessage} numberOfLines={3}>
+                  {tripError}
+                </Text>
+                <Text style={styles.errorHint}>Check the trip details, then try again.</Text>
               </View>
             </View>
           ) : null}
@@ -1044,29 +1083,34 @@ const styles = StyleSheet.create({
   },
   errorCard: {
     alignItems: "flex-start",
-    backgroundColor: colors.red50,
+    backgroundColor: "#fff7f6",
     borderColor: colors.redBorder,
-    borderRadius: radius.card,
+    borderRadius: radius.lg,
     borderWidth: 1,
     flexDirection: "row",
-    gap: spacing.md,
-    padding: spacing.xl,
-    ...shadows.soft,
+    gap: spacing.sm,
+    padding: spacing.lg,
   },
   errorCopy: {
     flex: 1,
   },
   errorTitle: {
     color: colors.red700,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "800",
-    marginBottom: spacing.xs,
+    marginBottom: 4,
   },
   errorMessage: {
     color: colors.red700,
     fontSize: 13,
+    fontWeight: "500",
+    lineHeight: 18,
+  },
+  errorHint: {
+    color: colors.slate500,
+    fontSize: 12,
     fontWeight: "600",
-    lineHeight: 19,
+    marginTop: spacing.xs,
   },
   saveTripButton: {
     minHeight: 40,
