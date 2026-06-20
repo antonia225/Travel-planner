@@ -9,6 +9,8 @@ Ever stared at a blank browser tab trying to plan a trip? This app helps you go 
 ## Table of Contents
 
 - [What You Can Do](#what-you-can-do)
+- [Demo Video](#demo-video)
+- [Project Management](#project-management)
 - [Tech Stack](#tech-stack)
 - [Quick Start](#quick-start)
 - [Running on a Real Phone](#running-on-a-real-phone)
@@ -18,6 +20,7 @@ Ever stared at a blank browser tab trying to plan a trip? This app helps you go 
 - [Configuration](#configuration)
 - [Admin & Monitoring](#admin--monitoring)
 - [Running Tests](#running-tests)
+- [AI Development Report](#ai-development-report)
 - [Project Layout](#project-layout)
 - [Architecture & UML](#architecture--uml)
 
@@ -35,6 +38,21 @@ Ever stared at a blank browser tab trying to plan a trip? This app helps you go 
 | 🎯 **Travel Interests** | Save preferences like food, nature, nightlife, culture, family-friendly, and more. |
 | 🔐 **Auth & Profiles** | Register, log in, update your profile, and change your password. |
 | 🛡️ **Admin Dashboard** | Manage users, roles, account status, AI logs, and backend usage metrics. |
+
+---
+
+## Demo Video
+
+An offline screencast of the application is available on YouTube:
+[AI Travel Planner demo](https://youtu.be/QzuFzcSo32w).
+
+---
+
+## Project Management
+
+The backlog, priorities, and user stories are managed in Jira. The board contains
+at least ten user stories:
+[ATPP Jira board](https://bialautaru.atlassian.net/jira/software/projects/ATPP/list?jql=project%20%3D%20ATPP%20ORDER%20BY%20cf%5B10019%5D%20ASC).
 
 ---
 
@@ -225,6 +243,21 @@ You can also run the Expo TypeScript check from the frontend folder:
 ```bash
 npx tsc --noEmit
 ```
+
+---
+
+## AI Development Report
+
+The project development process used AI tools for requirements analysis,
+architecture, implementation, testing, debugging, and documentation. The full
+report, including the tools used by each team member and the validation process,
+is available in [docs/AI_DEVELOPMENT_REPORT.md](docs/AI_DEVELOPMENT_REPORT.md).
+
+### Bug reporting and pull-request resolution
+
+Defects identified during code review were reported as pull-request comments and
+resolved before merge. Evidence: [Pull Request #13](https://github.com/antonia225/Travel-planner/pull/13)
+and its ["Requested changes" review](https://github.com/antonia225/Travel-planner/pull/13#pullrequestreview-4267536407).
 
 ---
 
