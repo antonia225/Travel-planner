@@ -1,7 +1,5 @@
 # Raport privind utilizarea toolurilor AI în dezvoltarea software
 
-## Proiect
-
 **AI Travel Planner** este o aplicație mobilă pentru planificarea călătoriilor,
 formată dintr-un frontend React Native/Expo și un backend FastAPI. Aplicația
 include doi agenți AI care rulează local prin Ollama: agentul pentru generarea
@@ -11,10 +9,6 @@ Acest document descrie utilizarea toolurilor AI în procesul de dezvoltare. Ele
 au fost folosite pentru analiză, proiectare, implementare, testare, depanare și
 documentare. Echipa a revizuit codul generat, l-a integrat incremental și l-a
 validat prin teste automate, rularea aplicației și code review în pull request-uri.
-
-> Toolurile de dezvoltare asistată de AI nu trebuie confundate cu modelele locale
-> Ollama din funcționalitatea aplicației: primele au ajutat echipa să construiască
-> software-ul, iar ultimele sunt parte din produsul livrat utilizatorilor.
 
 ## Tooluri utilizate
 
@@ -34,7 +28,7 @@ validat prin teste automate, rularea aplicației și code review în pull reques
 | Antonia Gridan | Gemini, GitHub Copilot | Asistență pentru analiză și implementare prin sugestii de cod și completare contextuală. |
 | Maria Petric | Codex, Claude | Asistență la implementare, analiză și formularea/rafinarea soluțiilor. |
 | Bianca Lăutaru | Claude în Cursor, Codex, Gemini | Formularea unor prompturi mai detaliate, analiză și implementare asistată. |
-| Gabriela | Codex, Gemini, ChatGPT | Asistență la analiză, implementare și clarificarea soluțiilor tehnice. |
+| Gabriela Pîrvulescu | Codex, Gemini, ChatGPT | Asistență la analiză, implementare și clarificarea soluțiilor tehnice. |
 | Antonia Stoica | Claude, Codex, GitHub Copilot | Claude pentru construirea prompturilor; Codex preponderent pentru backend și ulterior frontend; Copilot preponderent pentru frontend. |
 
 ## Utilizarea AI pe etapele procesului de dezvoltare
@@ -43,7 +37,7 @@ validat prin teste automate, rularea aplicației și code review în pull reques
 
 AI a fost folosit pentru clarificarea cerințelor, transformarea ideilor în user
 stories și identificarea criteriilor de acceptanță. Backlogul proiectului este
-gestionat în Jira și conține minimum zece user stories. Înainte de implementare,
+gestionat în Jira și conține 12 user stories. Înainte de implementare,
 propunerile generate au fost adaptate la tema proiectului și prioritizate de echipă.
 
 ### 2. Proiectare și arhitectură
