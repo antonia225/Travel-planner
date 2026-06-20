@@ -145,12 +145,3 @@ Modelele pot produce cod incomplet, incompatibil cu proiectul sau răspunsuri AI
 invalide. Din acest motiv, backendul validează outputurile LLM, tratează erorile și
 folosește fallback unde este cazul, iar codul propus de toolurile de dezvoltare a
 fost revizuit înainte de integrare.
-
-## Artefacte relevante
-
-- Backlog și user stories: [ATPP Jira board](https://bialautaru.atlassian.net/jira/software/projects/ATPP/list?jql=project%20%3D%20ATPP%20ORDER%20BY%20cf%5B10019%5D%20ASC) (minimum 10 user stories).
-- Demo offline: [AI Travel Planner demo](https://youtu.be/QzuFzcSo32w).
-- Diagrame: secțiunea **Architecture & UML** din README.
-- Teste automate: `backend/tests/` și `frontend/__tests__/`.
-- Pipeline CI: `.github/workflows/ci.yml`.
-- Istoric de implementare și review: branches, commits și pull request-uri GitHub.
